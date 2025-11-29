@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TetriSnake</title>
+</head>
+<body>
+    <script>
+        // HTML and CSS setup
+        document.head.insertAdjacentHTML('beforeend', `
+            <style>
+                body {
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #222;
+                    color: #fff;
+                    position: relative;
+                }
+                .main-container {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    position: relative;
+                }
+                #score {
+                    font-family: monospace;
+                    font-size: 24px;
+                    margin-bottom: 10px;
+                }
+                #gameCanvas {
+                    border: 1px solid #fff;
+                }
+                #nextCanvas {
+                    border: 1px solid #fff;
+                    position: absolute;
+                    top: 0;
+                }
+                #helpBtn {
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    width: 24px;
+                    height: 24px;
+                    background: #333;
+                    border: 1px solid #555;
+                    color: #888;
+                    font-family: monospace;
+                    font-size: 14px;
+                    cursor: pointer;
+                    border-radius: 4px;
+                }
+                #helpBtn:hover { color: #fff; border-color: #888; }
+                #helpOverlay {
+                    display: none;
+                    position: fixed;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.85);
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 100;
+                }
+                #helpOverlay.show { display: flex; }
+                #helpContent {
+                    background: #222;
+                    border: 1px solid #555;
+                    padding: 20px 30px;
+                    max-width: 400px;
+                    font-family: monospace;
+                    font-size: 13px;
+                    line-height: 1.6;
+                }
+                #helpContent h3 { margin: 0 0 12px 0; color: #fff; }
+                #helpContent p { margin: 0 0 10px 0; color: #ccc; }
+                #helpContent kbd { background: #333; padding: 2px 6px; border-radius: 3px; }
+                .power-up {
+                    animation: powerUpGlow 0.5s infinite alternate;
+                }
+                @keyframes powerUpGlow {
+                    from { box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.7); }
+                    to { box-shadow: 0 0 10px 5px rgba(255, 255, 0, 0.7); }
+                }
+            </style>
+        `);
+        const GRID_SIZE = 35, GRID_W = 10, GRID_H = 20;
+        document.body.innerHTML = `
+            <div class="main-container">
+                <div id="score">0</div>
+                <canvas id="gameCanvas" width="${GRID_SIZE * GRID_W}" height="${GRID_SIZE * GRID_H}"></canvas>
+                <canvas id="nextCanvas" width="120" height="120" style="left:${GRID_SIZE * GRID_W - 10}px"></canvas>
+            </div>
+            <button id="helpBtn">?</button>
+            <div id="helpOverlay">
+                <div id="helpContent">
+                    <h3>TetriSnake</h3>
+                    <p>Move — <kbd>Arrow</kbd> <kbd>WASD</kbd> <kbd>Mouse</kbd> <kbd>Stick</kbd></p>
+                    <p>Drop / Restart — <kbd>Space</kbd> <kbd>Click</kbd> <kbd>A</kbd></p>
+                    <p>Speed — <kbd>+</kbd> <kbd>-</kbd> <kbd>Scroll</kbd> <kbd>LB</kbd> <kbd>RB</kbd></p>
+                    <p>Spectator — <kbd>Esc</kbd> <kbd>Start</kbd></p>
+                    <p style="margin-top:16px;border-top:1px solid #444;padding-top:12px;">
+                        <span style="color:#f00">■</span> Red head eats red blocks (grow)<br>
+                        <span style="color:#090">■</span> Green body eats green blocks (shrink)<br>
+                        <span style="color:#ff0">■</span> Yellow = power-up (eat any color)<br>
+                        <span style="color:#f0f">■</span> Magenta = more falling blocks
+                    </p>
+                    <p style="color:#666;margin-top:12px;">Click anywhere to close</p>
+                </div>
+            </div>
+        `;
+
+        // Configuration
+        const CONFIG = {
+            GRID: { SIZE: GRID_SIZE, WIDTH: GRID_W, HEIGHT: GRID_H },
+            CANVAS: { WIDTH: GRID_SIZE * GRID_W, HEIGHT: GRID_SIZE * GRID_H, NEXT_WIDTH: 120, NEXT_HEIGHT: 120 },
+            SCORES: {
+                BASE: 3,
+                BLOCK_EATEN: 1,
+                LINE_CLEARED: 2.0,
+                BLOCK_FELL: -1.5,
+                POWER_UP: 2
+            },
+            SPEEDS: {
+                SNAKE: 175,
+                DROP: 350,
+                STEP: 1,
+                MIN_STEP: 0.01,
+                MAX_STEP: 2.0
+            },
+            COLORS: {
+                RED: "#f00",
+                GREEN: "#090",
+                SETTLED: "#fff",
+                BACKGROUND: "#000",
+                HEAD: "#f00",
+                BODY: "#090",
+                POWER_UP: "#ff0",
+                NEED_MORE_BLOCKS: "#f0f"
+            },
+            POWER_UP: {
+                CHANCE: 0.1,
+                DURATION: 3
+            },
+            NEED_MORE_BLOCKS: {
+                CHANCE: 0.1
+            },
+            SPAWN: {
+                START_BLOCKS: 1,
+                MAX_BLOCKS: 7,
+                COOLDOWN: 3
+            },
+            SPAWN_AI: {
+                LINES: 140.0,           // Reward line clears
+                HOLES: -105.0,          // Penalize holes (strong)
+                AGGREGATE_HEIGHT: -0.2, // Penalize total height
+                BUMPINESS: -1.5,      // Penalize unevenness (stronger)
+                WELLS: -0.3,          // Penalize deep wells
+                COL_TRANSITIONS: 0,   // Penalize vertical gaps
+                LOOKAHEAD: 1.0        // Weight for next piece score (1.0 = equal weight)
+            }
+        };
+
+        // DOM Elements (unchanged)
+        const DOM = {
+            canvas: document.getElementById('gameCanvas'),
+            ctx: document.getElementById('gameCanvas').getContext('2d'),
+            nextCanvas: document.getElementById('nextCanvas'),
+            nextCtx: document.getElementById('nextCanvas').getContext('2d'),
+            scoreDisplay: document.getElementById('score'),
+            gameCanvas: document.getElementById('gameCanvas')
+        };
+
+        // Game State
+        const SNAKE_START = { x: Math.floor(CONFIG.GRID.WIDTH / 2), y: CONFIG.GRID.HEIGHT - 1 };
+        const state = {
+            score: 0,
+            snake: [{ ...SNAKE_START }],
+            snakePositions: new Set([`${SNAKE_START.x},${SNAKE_START.y}`]),
+            direction: { x: 0, y: -1 },
+            lastDirection: { x: 0, y: -1 },
+            speed: {
+                step: CONFIG.SPEEDS.STEP,
+                snake: CONFIG.SPEEDS.SNAKE,
+                drop: CONFIG.SPEEDS.DROP
+            },
+            timings: {
+                lastMove: 0,
+                tetrominoDrop: 0,
+                lastSpawnTick: 0,
+                blockTick: 0,
+            },
+            growth: 0,
+            eatenBlocks: new Set(),
+            spectatorMode: false,
+            currentTetrominoes: [],
+            nextTetromino: null,
+            grid: Array(CONFIG.GRID.HEIGHT).fill().map(() => Array(CONFIG.GRID.WIDTH).fill(0)),
+            gameOver: false,
+            powerUpActive: false,
+            powerUpRemaining: 0,
+            mouseGridPos: null,
+            mousePixelPos: null,
+            isMouseActivated: true,
+            maxBlocks: 1,
+            gamepadButtonPressed: false,
+            gamepadStartPressed: false,
+            gamepadLBPressed: false,
+            gamepadRBPressed: false,
+        };
+
+        // Tetromino Definitions (unchanged)
+        const TETROMINOES = [
+            { shape: [[1,1], [1,1]], type: CONFIG.COLORS.RED },
+            { shape: [[0,0,0,0], [1,1,1,1]], type: CONFIG.COLORS.RED },
+            { shape: [[0,1,1], [1,1,0]], type: CONFIG.COLORS.RED },
+            { shape: [[1,1,0], [0,1,1]], type: CONFIG.COLORS.RED },
+            { shape: [[1,0,0], [1,1,1]], type: CONFIG.COLORS.RED },
+            { shape: [[0,0,1], [1,1,1]], type: CONFIG.COLORS.RED },
+            { shape: [[0,1,0], [1,1,1]], type: CONFIG.COLORS.RED },
+            { shape: [[1]], type: CONFIG.COLORS.RED },
+        ];
+
+        // Utility Functions
+        function formatScore(value) {
+            return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        function updateScore(points) {
+            const multiplier = state.powerUpActive ? CONFIG.SCORES.POWER_UP : 1;
+            state.score += points * CONFIG.SCORES.BASE * multiplier;
+            DOM.scoreDisplay.textContent = formatScore(Math.round(state.score));
+        }
+
+        function resetGame() {
+            Object.assign(state, {
+                score: 0,
+                snake: [{ ...SNAKE_START }],
+                snakePositions: new Set([`${SNAKE_START.x},${SNAKE_START.y}`]),
+                direction: { x: 0, y: -1 },
+                lastDirection: { x: 0, y: -1 },
+                speed: {
+                    step: CONFIG.SPEEDS.STEP,
+                    snake: CONFIG.SPEEDS.SNAKE,
+                    drop: CONFIG.SPEEDS.DROP
+                },
+                timings: {
+                    lastMove: 0,
+                    tetrominoDrop: 0,
+                    lastSpawnTick: 0,
+                    blockTick: 0,
+                },
+                growth: 0,
+                eatenBlocks: new Set(),
+                spectatorMode: false,
+                currentTetrominoes: [],
+                nextTetromino: null,
+                grid: Array(CONFIG.GRID.HEIGHT).fill().map(() => Array(CONFIG.GRID.WIDTH).fill(0)),
+                gameOver: false,
+                powerUpActive: false,
+                powerUpRemaining: 0,
+                mouseGridPos: null,
+                maxBlocks: CONFIG.SPAWN.START_BLOCKS,
+            });
+        }
+
+        function getSettledPosition(shape, posX, posY, customGrid = state.grid) {
+            let y = posY;
+            while (!checkCollision(shape, posX, y + 1, false, true, customGrid)) {
+                y++;
+            }
+            return y;
+        }
+
+        function checkCollision(tetrominoShape, posX, posY, ignoreGrid = false, ignoreSnake = false, customGrid = state.grid) {
+            return tetrominoShape.some((row, dy) =>
+                row.some((cell, dx) => {
+                    if (cell) {
+                        const x = posX + dx;
+                        const y = posY + dy;
+                        const blockKey = `${x},${y}`;
+                        return (
+                            x < 0 || x >= CONFIG.GRID.WIDTH ||
+                            y >= CONFIG.GRID.HEIGHT ||
+                            (!ignoreSnake && y >= 0 && !state.spectatorMode && state.snakePositions.has(blockKey) && !state.eatenBlocks.has(blockKey)) ||
+                            (!ignoreGrid && y >= 0 && y < CONFIG.GRID.HEIGHT && customGrid[y][x])
+                        );
+                    }
+                    return false;
+                })
+            );
+        }
+
+        function checkHeadCollision(head) {
+            const headKey = `${head.x},${head.y}`;
+            const currentHeadKey = `${state.snake[0].x},${state.snake[0].y}`;
+            return (
+                head.x < 0 || head.x >= CONFIG.GRID.WIDTH ||
+                head.y < 0 || head.y >= CONFIG.GRID.HEIGHT ||
+                (state.snakePositions.has(headKey) && headKey !== currentHeadKey) ||
+                (head.y < CONFIG.GRID.HEIGHT && state.grid[head.y][head.x])
+            );
+        }
+
+        function rotateTetromino(matrix) {
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            const rotated = Array(cols).fill().map(() => Array(rows).fill(0));
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    rotated[x][rows - 1 - y] = matrix[y][x];
+                }
+            }
+            return rotated;
+        }
+
+        function checkTetrominoOverlap(tetrominoShape, posX, posY) {
+            const newBlocks = [];
+            tetrominoShape.forEach((row, dy) => {
+                row.forEach((cell, dx) => {
+                    if (cell) {
+                        const x = posX + dx;
+                        const y = posY + dy;
+                        newBlocks.push(`${x},${y}`);
+                    }
+                });
+            });
+
+            for (const otherTetromino of state.currentTetrominoes) {
+                for (const block of otherTetromino.blocks) {
+                    if (newBlocks.includes(block.key)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function spawnTetromino() {
+            // Generate next tetromino if not present
+            if (!state.nextTetromino) {
+                const template = TETROMINOES[Math.floor(Math.random() * TETROMINOES.length)];
+                const type = Math.random() < 0.5 ? CONFIG.COLORS.RED : CONFIG.COLORS.GREEN;
+                state.nextTetromino = { shape: template.shape, type: type };
+            }
+
+            // Set up new tetromino and prepare the next one
+            const newTetromino = { ...state.nextTetromino };
+            const template = TETROMINOES[Math.floor(Math.random() * TETROMINOES.length)];
+            const type = Math.random() < 0.5 ? CONFIG.COLORS.RED : CONFIG.COLORS.GREEN;
+            state.nextTetromino = { shape: template.shape, type: type };
+
+            // Helper: Predict grid state after all falling tetrominoes land
+            function getPredictedGrid() {
+                let predictedGrid = state.grid.map(row => [...row]);
+                const fallingTetrominoes = [...state.currentTetrominoes].sort((a, b) => b.pos.y - a.pos.y);
+                fallingTetrominoes.forEach(tetromino => {
+                    let y = tetromino.pos.y;
+                    while (!checkCollision(tetromino.shape, tetromino.pos.x, y + 1, false, false, predictedGrid)) {
+                        y++;
+                    }
+                    tetromino.shape.forEach((row, dy) => {
+                        row.forEach((cell, dx) => {
+                            const gridY = y + dy;
+                            if (cell && gridY >= 0 && gridY < CONFIG.GRID.HEIGHT) {
+                                predictedGrid[gridY][tetromino.pos.x + dx] = 1;
+                            }
+                        });
+                    });
+                });
+                return predictedGrid;
+            }
+
+            // Helper: Get column heights (height from bottom, 0 = empty)
+            function getColumnHeights(grid) {
+                const heights = [];
+                for (let x = 0; x < CONFIG.GRID.WIDTH; x++) {
+                    let h = 0;
+                    for (let y = 0; y < CONFIG.GRID.HEIGHT; y++) {
+                        if (grid[y][x]) { h = CONFIG.GRID.HEIGHT - y; break; }
+                    }
+                    heights.push(h);
+                }
+                return heights;
+            }
+
+            // Helper: Count holes (empty cells below filled ones)
+            function countHoles(grid) {
+                let holes = 0;
+                for (let x = 0; x < CONFIG.GRID.WIDTH; x++) {
+                    let blockFound = false;
+                    for (let y = 0; y < CONFIG.GRID.HEIGHT; y++) {
+                        if (grid[y][x]) blockFound = true;
+                        else if (blockFound) holes++;
+                    }
+                }
+                return holes;
+            }
+
+            // Helper: Sum of all column heights
+            function getAggregateHeight(heights) {
+                return heights.reduce((a, b) => a + b, 0);
+            }
+
+            // Helper: Bumpiness (sum of height differences between adjacent columns)
+            function getBumpiness(heights) {
+                let bump = 0;
+                for (let i = 0; i < heights.length - 1; i++) {
+                    bump += Math.abs(heights[i] - heights[i + 1]);
+                }
+                return bump;
+            }
+
+            // Helper: Detect wells (columns lower than both neighbors, not edges)
+            function getWellDepth(heights) {
+                let wellSum = 0;
+                for (let x = 1; x < heights.length - 1; x++) {
+                    const depth = Math.min(heights[x - 1], heights[x + 1]) - heights[x];
+                    if (depth > 0) wellSum += depth;
+                }
+                return wellSum;
+            }
+
+            // Helper: Column transitions (vertical empty-filled alternations)
+            function getColTransitions(grid) {
+                let transitions = 0;
+                for (let x = 0; x < CONFIG.GRID.WIDTH; x++) {
+                    let prev = 1; // treat above grid as filled
+                    for (let y = 0; y < CONFIG.GRID.HEIGHT; y++) {
+                        const curr = grid[y][x] ? 1 : 0;
+                        if (curr !== prev) transitions++;
+                        prev = curr;
+                    }
+                    if (prev === 0) transitions++; // bottom boundary
+                }
+                return transitions;
+            }
+
+            // Helper: Calculate heuristic score
+            function calculateScore(lines, holes, aggHeight, bumpiness, wells, colTrans) {
+                const w = CONFIG.SPAWN_AI;
+                return w.LINES * lines + w.HOLES * holes + w.AGGREGATE_HEIGHT * aggHeight +
+                       w.BUMPINESS * bumpiness + w.WELLS * wells + w.COL_TRANSITIONS * colTrans;
+            }
+
+            // Helper: Remove completed lines and adjust grid
+            function removeCompletedLines(grid) {
+                const newGrid = grid.filter(row => !row.every(cell => cell === 1));
+                const removedLines = grid.length - newGrid.length;
+                for (let i = 0; i < removedLines; i++) {
+                    newGrid.unshift(Array(CONFIG.GRID.WIDTH).fill(0));
+                }
+                return newGrid;
+            }
+
+            // Helper: Evaluate all placements for a shape on a grid
+            // Returns { bestScore, bestPlacements } where bestPlacements is array of { rotated, x, finalGrid }
+            // skipOverlapCheck=true for lookahead (simulated grid, no falling pieces)
+            // nextShape: if provided, factors in best score for next piece (lookahead)
+            function evaluatePlacements(grid, shape, skipOverlapCheck = false, nextShape = null) {
+                let bestPlacements = [];
+                let bestScore = -Infinity;
+                let rotated = shape;
+
+                for (let r = 0; r < 4; r++) {
+                    let min_dy = null;
+                    for (let dy = 0; dy < rotated.length; dy++) {
+                        if (rotated[dy].some(cell => cell === 1)) {
+                            min_dy = dy;
+                            break;
+                        }
+                    }
+
+                    const tetWidth = rotated[0].length;
+                    const spawnY = -rotated.length;
+                    for (let x = 0; x <= CONFIG.GRID.WIDTH - tetWidth; x++) {
+                        const noCollision = !checkCollision(rotated, x, spawnY, false, true, grid);
+                        const noOverlap = skipOverlapCheck || !checkTetrominoOverlap(rotated, x, spawnY);
+                        if (noCollision && noOverlap) {
+                            let y = spawnY;
+                            while (!checkCollision(rotated, x, y + 1, false, true, grid)) {
+                                y++;
+                            }
+                            if (y + min_dy < 0) continue;
+
+                            // Simulate placement
+                            const tempGrid = grid.map(row => [...row]);
+                            const currentRotated = rotated;
+                            rotated.forEach((row, dy) => {
+                                for (let dx = 0; dx < tetWidth; dx++) {
+                                    if (row[dx] && y + dy >= 0 && y + dy < CONFIG.GRID.HEIGHT) {
+                                        tempGrid[y + dy][x + dx] = 1;
+                                    }
+                                }
+                            });
+
+                            // Evaluate placement
+                            const completedLines = tempGrid.filter(row => row.every(cell => cell === 1)).length;
+                            const finalGrid = removeCompletedLines(tempGrid);
+                            const holes = countHoles(finalGrid);
+                            const heights = getColumnHeights(finalGrid);
+                            const aggHeight = getAggregateHeight(heights);
+                            const bumpiness = getBumpiness(heights);
+                            const wells = getWellDepth(heights);
+                            const colTrans = getColTransitions(finalGrid);
+                            const score = calculateScore(completedLines, holes, aggHeight, bumpiness, wells, colTrans);
+
+                            // Lookahead: add weighted score for best next piece placement
+                            let combinedScore = score;
+                            if (nextShape) {
+                                const { bestScore: nextBestScore } = evaluatePlacements(finalGrid, nextShape, true, null);
+                                if (nextBestScore > -Infinity) {
+                                    combinedScore += CONFIG.SPAWN_AI.LOOKAHEAD * nextBestScore;
+                                }
+                            }
+
+                            if (combinedScore > bestScore) {
+                                bestScore = combinedScore;
+                                bestPlacements = [{ rotated: currentRotated, x, finalGrid }];
+                            } else if (combinedScore === bestScore) {
+                                bestPlacements.push({ rotated: currentRotated, x, finalGrid });
+                            }
+                        }
+                    }
+                    rotated = rotateTetromino(rotated);
+                }
+                return { bestScore, bestPlacements };
+            }
+
+            // Placement logic with AI (considers next piece via lookahead)
+            const predictedGrid = getPredictedGrid();
+            const { bestPlacements } = evaluatePlacements(predictedGrid, newTetromino.shape, false, state.nextTetromino.shape);
+
+            // Random tie-break among equal-score placements
+            const bestPlacement = bestPlacements.length > 0
+                ? bestPlacements[Math.floor(Math.random() * bestPlacements.length)]
+                : null;
+
+            const noTetrominoes = state.currentTetrominoes.length === 0 && !state.grid.some(row => row.some(cell => cell === 1));
+            if (noTetrominoes) {
+                // Randomize spawn position
+                const tetWidth = newTetromino.shape[0].length;
+                newTetromino.pos = {
+                    x: Math.floor(Math.random() * (CONFIG.GRID.WIDTH - tetWidth + 1)),
+                    y: -newTetromino.shape.length
+                };
+            }
+            // Apply best placement or indicate failure
+            else if (bestPlacement) {
+                newTetromino.shape = bestPlacement.rotated;
+                newTetromino.pos = { x: bestPlacement.x, y: -newTetromino.shape.length };
+            } else {
+                return false; // No valid placement found (game over)
+            }
+
+            // Assign special types
+            if (Math.random() < CONFIG.NEED_MORE_BLOCKS.CHANCE) newTetromino.type = CONFIG.COLORS.NEED_MORE_BLOCKS;
+            else if (Math.random() < CONFIG.POWER_UP.CHANCE) newTetromino.type = CONFIG.COLORS.POWER_UP;
+
+            // Set blocks for rendering
+            newTetromino.blocks = [];
+            newTetromino.shape.forEach((row, dy) => {
+                row.forEach((cell, dx) => {
+                    if (cell) {
+                        newTetromino.blocks.push({
+                            x: newTetromino.pos.x + dx,
+                            y: newTetromino.pos.y + dy,
+                            key: `${newTetromino.pos.x + dx},${newTetromino.pos.y + dy}`
+                        });
+                    }
+                });
+            });
+
+            // Validate placement
+            if (checkTetrominoOverlap(newTetromino.shape, newTetromino.pos.x, newTetromino.pos.y)) {
+                return false;
+            }
+
+            // Add tetromino and check for game over
+            state.currentTetrominoes.push(newTetromino);
+            if (!state.spectatorMode && checkCollision(newTetromino.shape, newTetromino.pos.x, newTetromino.pos.y, false, false)) {
+                state.gameOver = true;
+            }
+            return true;
+        }
+
+        function drawBlock(ctx, x, y, color, size = CONFIG.GRID.SIZE - 2) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * CONFIG.GRID.SIZE, y * CONFIG.GRID.SIZE, size, size);
+        }
+
+        function drawGame() {
+            DOM.ctx.fillStyle = CONFIG.COLORS.BACKGROUND;
+            DOM.ctx.fillRect(0, 0, CONFIG.CANVAS.WIDTH, CONFIG.CANVAS.HEIGHT);
+
+            if (!state.spectatorMode) {
+                state.snake.forEach((segment, index) => {
+                    const color = state.powerUpActive ? CONFIG.COLORS.POWER_UP : (index === 0 ? CONFIG.COLORS.HEAD : CONFIG.COLORS.BODY);
+                    drawBlock(DOM.ctx, segment.x, segment.y, color);
+                });
+            }
+
+            // Draw tetrominoes, only for y >= 0
+            state.currentTetrominoes.forEach(tetromino => {
+                DOM.ctx.fillStyle = tetromino.type;
+                tetromino.shape.forEach((row, dy) => {
+                    row.forEach((cell, dx) => {
+                        const y = tetromino.pos.y + dy;
+                        if (cell && y >= 0) {
+                            const blockKey = `${tetromino.pos.x + dx},${y}`;
+                            if (!state.eatenBlocks.has(blockKey)) {
+                                drawBlock(DOM.ctx, tetromino.pos.x + dx, y, tetromino.type);
+                            }
+                        }
+                    });
+                });
+            });
+
+            DOM.ctx.fillStyle = CONFIG.COLORS.SETTLED;
+            state.grid.forEach((row, y) => row.forEach((cell, x) => {
+                if (cell) drawBlock(DOM.ctx, x, y, CONFIG.COLORS.SETTLED);
+            }));
+
+            DOM.nextCtx.fillStyle = CONFIG.COLORS.BACKGROUND;
+            DOM.nextCtx.fillRect(0, 0, CONFIG.CANVAS.NEXT_WIDTH, CONFIG.CANVAS.NEXT_HEIGHT);
+
+            if (state.nextTetromino) {
+                DOM.nextCtx.fillStyle = state.nextTetromino.type;
+                const blockWidth = state.nextTetromino.shape[0].length * CONFIG.GRID.SIZE;
+                const blockHeight = state.nextTetromino.shape.length * CONFIG.GRID.SIZE;
+                const offsetX = (CONFIG.CANVAS.NEXT_WIDTH - blockWidth) / 2;
+                const offsetY = (CONFIG.CANVAS.NEXT_HEIGHT - blockHeight) / 2;
+                state.nextTetromino.shape.forEach((row, dy) => {
+                    row.forEach((cell, dx) => {
+                        if (cell) DOM.nextCtx.fillRect(offsetX + dx * CONFIG.GRID.SIZE, offsetY + dy * CONFIG.GRID.SIZE, CONFIG.GRID.SIZE, CONFIG.GRID.SIZE);
+                    });
+                });
+            }
+
+            if (state.powerUpActive || state.currentTetrominoes.some(t => t.type === CONFIG.COLORS.POWER_UP)) {
+                DOM.gameCanvas.classList.add('power-up');
+            } else {
+                DOM.gameCanvas.classList.remove('power-up');
+            }
+        }
+
+        function addOneMoreFallingBlock() {
+            state.maxBlocks++;
+        }
+
+        function eatTetrominoBlock(segment, isHead, tetromino) {
+            if (!tetromino) return false;
+
+            const segmentColor = isHead ? CONFIG.COLORS.HEAD : CONFIG.COLORS.BODY;
+            const segmentKey = `${segment.x},${segment.y}`;
+            let hasMatch = false, hasMismatch = false;
+
+            for (const block of tetromino.blocks) {
+                if (block.key === segmentKey) {
+                    if (state.powerUpActive || tetromino.type === segmentColor || tetromino.type === CONFIG.COLORS.POWER_UP || tetromino.type === CONFIG.COLORS.NEED_MORE_BLOCKS) hasMatch = true;
+                    else hasMismatch = true;
+                    break;
+                }
+            }
+
+            if (!hasMatch && !hasMismatch) return false;
+
+            if (hasMatch) {
+                const blockCount = tetromino.blocks.length;
+                tetromino.blocks.forEach(block => state.eatenBlocks.add(block.key));
+                let points = CONFIG.SCORES.BLOCK_EATEN * CONFIG.SCORES.BASE * (blockCount + state.snake.length);
+
+                if (tetromino.type === CONFIG.COLORS.POWER_UP) {
+                    points *= CONFIG.SCORES.POWER_UP;
+                    state.powerUpActive = true;
+                    state.powerUpRemaining = (state.powerUpRemaining || 0) + CONFIG.POWER_UP.DURATION;
+                } else if (tetromino.type === CONFIG.COLORS.NEED_MORE_BLOCKS) {
+                    addOneMoreFallingBlock();
+                }
+
+                updateScore(points);
+
+                if (tetromino.type === CONFIG.COLORS.RED || tetromino.type === CONFIG.COLORS.POWER_UP) {
+                    state.growth += Math.ceil(blockCount / 2);
+                } else if (tetromino.type === CONFIG.COLORS.GREEN) {
+                    const blocksToRemove = Math.min(Math.ceil(blockCount / 2), state.snake.length - 1);
+                    for (let i = 0; i < blocksToRemove; i++) {
+                        const tail = state.snake.pop();
+                        state.snakePositions.delete(`${tail.x},${tail.y}`);
+                    }
+                }
+
+                if (state.powerUpActive && state.powerUpRemaining > 0) {
+                    state.powerUpRemaining--;
+                    if (state.powerUpRemaining === 0) state.powerUpActive = false;
+                }
+
+                return true;
+            } else if (hasMismatch) {
+                if (!state.powerUpActive) state.gameOver = true;
+                return false;
+            }
+            return false;
+        }
+
+        function moveSnake(timestamp) {
+            if (state.spectatorMode) return;
+            if (timestamp - state.timings.lastMove < state.speed.snake) return;
+            state.timings.lastMove = timestamp;
+
+            if (state.isMouseActivated && state.mouseGridPos) {
+                const currentHead = state.snake[0];
+                const headPixelX = (currentHead.x + 0.5) * CONFIG.GRID.SIZE;
+                const headPixelY = (currentHead.y + 0.5) * CONFIG.GRID.SIZE;
+                const rect = DOM.canvas.getBoundingClientRect();
+                const mousePixelX = state.mousePixelPos.x - rect.left;
+                const mousePixelY = state.mousePixelPos.y - rect.top;
+                const dxPixel = mousePixelX - headPixelX;
+                const dyPixel = mousePixelY - headPixelY;
+
+                let newDirX = 0, newDirY = 0;
+                if (Math.abs(dxPixel) > Math.abs(dyPixel)) newDirX = dxPixel > 0 ? 1 : -1;
+                else newDirY = dyPixel > 0 ? 1 : -1;
+
+                const forward = { x: newDirX, y: newDirY };
+                const left = { x: -newDirY, y: newDirX };
+                const right = { x: newDirY, y: -newDirX };
+
+                const futureForward = { x: currentHead.x + forward.x, y: currentHead.y + forward.y };
+                const futureLeft = { x: currentHead.x + left.x, y: currentHead.y + left.y };
+                const futureRight = { x: currentHead.x + right.x, y: currentHead.y + right.y };
+
+                if (!checkHeadCollision(futureForward) && updateDirection(forward.x, forward.y)) {}
+                else if (!checkHeadCollision(futureLeft) && updateDirection(left.x, left.y)) {}
+                else if (!checkHeadCollision(futureRight) && updateDirection(right.x, right.y)) {}
+            }
+
+            const head = { x: state.snake[0].x + state.direction.x, y: state.snake[0].y + state.direction.y };
+            state.lastDirection = { ...state.direction };
+
+            if (checkHeadCollision(head)) {
+                state.gameOver = true;
+                return;
+            }
+
+            state.snake.unshift(head);
+            state.snakePositions.add(`${head.x},${head.y}`);
+
+            const headEaten = [];
+            state.currentTetrominoes.forEach((tetromino, index) => {
+                if (eatTetrominoBlock(head, true, tetromino)) headEaten.push(index);
+            });
+            headEaten.sort((a, b) => b - a).forEach(index => state.currentTetrominoes.splice(index, 1));
+
+            for (let i = 1; i < state.snake.length; i++) {
+                const bodyEaten = [];
+                state.currentTetrominoes.forEach((tetromino, index) => {
+                    if (eatTetrominoBlock(state.snake[i], false, tetromino)) bodyEaten.push(index);
+                });
+                bodyEaten.sort((a, b) => b - a).forEach(index => state.currentTetrominoes.splice(index, 1));
+                if (bodyEaten.length > 0) break;
+            }
+
+            if (state.growth > 0) state.growth--;
+            else if (state.snake.length > 1) {
+                const tail = state.snake.pop();
+                state.snakePositions.delete(`${tail.x},${tail.y}`);
+            }
+            checkLines();
+        }
+
+        function dropTetromino(timestamp) {
+            if (timestamp - state.timings.tetrominoDrop < state.speed.drop) return;
+            state.timings.tetrominoDrop = timestamp;
+            state.timings.blockTick++;
+
+            if (state.currentTetrominoes.length < state.maxBlocks && state.timings.blockTick - state.timings.lastSpawnTick >= CONFIG.SPAWN.COOLDOWN) {
+                if (spawnTetromino()) {
+                    state.timings.lastSpawnTick = state.timings.blockTick;
+                }
+            }
+
+            const toRemove = [];
+            state.currentTetrominoes.forEach((tetromino, index) => {
+                tetromino.pos.y++;
+                tetromino.blocks.forEach(block => {
+                    block.y += 1;
+                    block.key = `${block.x},${block.y}`;
+                });
+
+                if (!state.spectatorMode) {
+                    const head = state.snake[0];
+                    if (eatTetrominoBlock(head, true, tetromino)) {
+                        toRemove.push(index);
+                        return;
+                    }
+                    for (let i = 1; i < state.snake.length; i++) {
+                        if (eatTetrominoBlock(state.snake[i], false, tetromino)) {
+                            toRemove.push(index);
+                            return;
+                        }
+                    }
+                }
+
+                if (checkCollision(tetromino.shape, tetromino.pos.x, tetromino.pos.y, false, false)) {
+                    tetromino.pos.y--;
+                    tetromino.blocks.forEach(block => {
+                        block.y -= 1;
+                        block.key = `${block.x},${block.y}`;
+                    });
+                    // Check if any block settles above the grid (y < 0)
+                    if (tetromino.blocks.some(block => block.y < 0)) {
+                        state.gameOver = true;
+                    } else {
+                        tetromino.shape.forEach((row, dy) => {
+                            row.forEach((cell, dx) => {
+                                const y = tetromino.pos.y + dy;
+                                if (cell && y >= 0 && y < CONFIG.GRID.HEIGHT && !state.eatenBlocks.has(`${tetromino.pos.x + dx},${y}`)) {
+                                    state.grid[y][tetromino.pos.x + dx] = 1;
+                                }
+                            });
+                        });
+                        updateScore(CONFIG.SCORES.BLOCK_FELL * CONFIG.SCORES.BASE * tetromino.shape.flat().filter(cell => cell).length);
+                        toRemove.push(index);
+                    }
+                }
+            });
+
+            toRemove.sort((a, b) => b - a).forEach(index => state.currentTetrominoes.splice(index, 1));
+
+            if (state.currentTetrominoes.length === 0) state.eatenBlocks.clear();
+            checkLines();
+        }
+
+        function checkLines() {
+            let linesCleared = 0;
+            for (let y = CONFIG.GRID.HEIGHT - 1; y >= 0; y--) {
+                if (state.grid[y].every(cell => cell)) {
+                    state.grid.splice(y, 1);
+                    state.grid.unshift(Array(CONFIG.GRID.WIDTH).fill(0));
+                    linesCleared++;
+                }
+            }
+
+            if (linesCleared > 0) {
+                updateScore(CONFIG.SCORES.LINE_CLEARED * CONFIG.SCORES.BASE * CONFIG.GRID.WIDTH * linesCleared);
+                if (!state.spectatorMode) {
+                    const head = state.snake[0];
+                    state.snake = [head];
+                    state.snakePositions = new Set([`${head.x},${head.y}`]);
+                    state.growth = 0;
+                }
+            }
+        }
+
+        function handleSpaceAction() {
+            if (state.gameOver) {
+                resetGame();
+                requestAnimationFrame(update);
+            } else {
+                state.currentTetrominoes.forEach(tetromino => {
+                    let dropDistance = 0;
+                    while (!checkCollision(tetromino.shape, tetromino.pos.x, tetromino.pos.y + dropDistance + 1, false, false)) {
+                        dropDistance++;
+                    }
+                    tetromino.pos.y += dropDistance;
+                    tetromino.blocks.forEach(block => {
+                        block.y += dropDistance;
+                        block.key = `${block.x},${block.y}`;
+                    });
+                });
+            }
+        }
+
+        const KEY_ACTIONS = {
+            'Escape': () => {
+                state.spectatorMode = !state.spectatorMode;
+                if (state.spectatorMode) {
+                    state.snake = [];
+                    state.snakePositions.clear();
+                    state.maxBlocks = CONFIG.SPAWN.MAX_BLOCKS;
+                } else resetGame();
+            },
+            '+': () => {
+                state.speed.step = Math.max(state.speed.step - 0.05, CONFIG.SPEEDS.MIN_STEP);
+                state.speed.snake = CONFIG.SPEEDS.SNAKE * state.speed.step;
+                state.speed.drop = CONFIG.SPEEDS.DROP * state.speed.step;
+            },
+            '-': () => {
+                state.speed.step = Math.min(state.speed.step + 0.05, CONFIG.SPEEDS.MAX_STEP);
+                state.speed.snake = CONFIG.SPEEDS.SNAKE * state.speed.step;
+                state.speed.drop = CONFIG.SPEEDS.DROP * state.speed.step;
+            },
+            ' ': (e) => {
+                e.preventDefault();
+                handleSpaceAction();
+            },
+            'ArrowUp': () => updateDirection(0, -1),
+            'ArrowDown': () => updateDirection(0, 1),
+            'ArrowLeft': () => updateDirection(-1, 0),
+            'ArrowRight': () => updateDirection(1, 0),
+            'w': () => updateDirection(0, -1),
+            's': () => updateDirection(0, 1),
+            'a': () => updateDirection(-1, 0),
+            'd': () => updateDirection(1, 0),
+            'W': () => updateDirection(0, -1),
+            'S': () => updateDirection(0, 1),
+            'A': () => updateDirection(-1, 0),
+            'D': () => updateDirection(1, 0)
+        };
+
+        function updateDirection(x, y) {
+            const initialDirection = state.direction;
+            if (state.spectatorMode) return false;
+            if (state.snake.length > 1) {
+                if (x === 0 && y === -1 && state.lastDirection.y !== 1) state.direction = { x, y };
+                else if (x === 0 && y === 1 && state.lastDirection.y !== -1) state.direction = { x, y };
+                else if (x === -1 && y === 0 && state.lastDirection.x !== 1) state.direction = { x, y };
+                else if (x === 1 && y === 0 && state.lastDirection.x !== -1) state.direction = { x, y };
+            } else {
+                state.direction = { x, y };
+            }
+            if (state.isMouseActivated) state.isMouseActivated = false;
+            return state.direction !== initialDirection;
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (KEY_ACTIONS[e.key]) KEY_ACTIONS[e.key](e);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            const rect = DOM.canvas.getBoundingClientRect();
+            const relativeX = e.clientX - rect.left;
+            const relativeY = e.clientY - rect.top;
+            state.mousePixelPos = { x: e.clientX, y: e.clientY };
+            const gridX = Math.floor(relativeX / CONFIG.GRID.SIZE);
+            const gridY = Math.floor(relativeY / CONFIG.GRID.SIZE);
+            state.mouseGridPos = {
+                x: Math.min(Math.max(0, gridX), CONFIG.GRID.WIDTH - 1),
+                y: Math.min(Math.max(0, gridY), CONFIG.GRID.HEIGHT - 1)
+            };
+            if (!state.isMouseActivated) state.isMouseActivated = true;
+        });
+
+        DOM.canvas.addEventListener('click', (e) => {
+            e.preventDefault();
+            handleSpaceAction();
+        });
+
+        DOM.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                KEY_ACTIONS['+']();
+            } else if (e.deltaY > 0) {
+                KEY_ACTIONS['-']();
+            }
+        });
+
+        document.getElementById('helpBtn').addEventListener('click', () => {
+            document.getElementById('helpOverlay').classList.add('show');
+        });
+        document.getElementById('helpOverlay').addEventListener('click', () => {
+            document.getElementById('helpOverlay').classList.remove('show');
+        });
+
+        function handleGamepad() {
+            const gp = navigator.getGamepads()[0];
+            if (!gp) return;
+
+            const deadzone = 0.3;
+            let ax = gp.axes[0], ay = gp.axes[1];
+            const rx = gp.axes[2], ry = gp.axes[3];
+            if (Math.abs(rx) > Math.abs(ax)) ax = rx;
+            if (Math.abs(ry) > Math.abs(ay)) ay = ry;
+            if (Math.abs(ax) > deadzone || Math.abs(ay) > deadzone) {
+                if (Math.abs(ax) > Math.abs(ay)) updateDirection(ax > 0 ? 1 : -1, 0);
+                else updateDirection(0, ay > 0 ? 1 : -1);
+            }
+
+            const actionPressed = gp.buttons[0].pressed;
+            if (actionPressed && !state.gamepadButtonPressed) handleSpaceAction();
+            state.gamepadButtonPressed = actionPressed;
+
+            const startPressed = gp.buttons[9]?.pressed;
+            if (startPressed && !state.gamepadStartPressed) {
+                state.spectatorMode = !state.spectatorMode;
+                if (state.spectatorMode) {
+                    state.snake = [];
+                    state.snakePositions.clear();
+                    state.maxBlocks = CONFIG.SPAWN.MAX_BLOCKS;
+                } else resetGame();
+            }
+            state.gamepadStartPressed = startPressed;
+
+            const lbPressed = gp.buttons[4]?.pressed;
+            if (lbPressed && !state.gamepadLBPressed) {
+                state.speed.step = Math.min(state.speed.step + 0.05, CONFIG.SPEEDS.MAX_STEP);
+                state.speed.snake = CONFIG.SPEEDS.SNAKE * state.speed.step;
+                state.speed.drop = CONFIG.SPEEDS.DROP * state.speed.step;
+            }
+            state.gamepadLBPressed = lbPressed;
+
+            const rbPressed = gp.buttons[5]?.pressed;
+            if (rbPressed && !state.gamepadRBPressed) {
+                state.speed.step = Math.max(state.speed.step - 0.05, CONFIG.SPEEDS.MIN_STEP);
+                state.speed.snake = CONFIG.SPEEDS.SNAKE * state.speed.step;
+                state.speed.drop = CONFIG.SPEEDS.DROP * state.speed.step;
+            }
+            state.gamepadRBPressed = rbPressed;
+        }
+
+        function update(timestamp) {
+            handleGamepad();
+            if (state.gameOver) {
+                DOM.ctx.fillStyle = '#ff2';
+                DOM.ctx.font = '30px Arial';
+                DOM.ctx.fillText('Game Over', CONFIG.CANVAS.WIDTH / 4, CONFIG.CANVAS.HEIGHT / 2);
+                requestAnimationFrame(update);
+                return;
+            }
+
+            moveSnake(timestamp);
+            dropTetromino(timestamp);
+            drawGame();
+            state.eatenBlocks.clear();
+            requestAnimationFrame(update);
+        }
+
+        resetGame();
+        requestAnimationFrame(update);
+    </script>
+</body>
+</html>
