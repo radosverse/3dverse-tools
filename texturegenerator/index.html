@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PBR Texture Generator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+    }
+    .app {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .capabilities {
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 20px;
+      padding: 8px;
+      background: #2a2a4a;
+      border-radius: 4px;
+    }
+    .capabilities .backend {
+      color: #7a7aff;
+      font-weight: bold;
+    }
+    .capabilities .feature {
+      display: inline-block;
+      margin: 0 4px;
+      padding: 2px 6px;
+      background: #3a3a5a;
+      border-radius: 3px;
+    }
+    .capabilities .feature.active {
+      background: #3a6a3a;
+      color: #8f8;
+    }
+    .capabilities .feature.inactive {
+      background: #5a3a3a;
+      color: #f88;
+    }
+    .drop-zone {
+      border: 2px dashed #4a4a6a;
+      border-radius: 8px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 20px;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #7878ff;
+      background: rgba(120, 120, 255, 0.1);
+    }
+    .drop-zone input {
+      display: none;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #2a2a4a;
+      border-radius: 8px;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .control-group label {
+      font-size: 12px;
+      color: #aaa;
+    }
+    .control-group input[type="range"] {
+      width: 100%;
+    }
+    .control-group .value {
+      font-size: 11px;
+      color: #888;
+      text-align: right;
+    }
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+    }
+    .preview-item {
+      background: #2a2a4a;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .preview-item h3 {
+      padding: 10px;
+      font-size: 14px;
+      background: #3a3a5a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .preview-item canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+      background: #111;
+    }
+    .preview-item button {
+      padding: 4px 10px;
+      font-size: 12px;
+      background: #5a5aaa;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+    }
+    .preview-item button:hover {
+      background: #6a6acc;
+    }
+    .hidden {
+      display: none !important;
+    }
+    .status {
+      text-align: center;
+      padding: 10px;
+      color: #888;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-DkYzZcjR.js"></script>
+</head>
+<body>
+  <div class="app">
+    <h1>PBR Texture Generator</h1>
+
+    <div class="capabilities" id="capabilities">
+      Detecting capabilities...
+    </div>
+
+    <div class="drop-zone" id="dropZone">
+      <p>Drop an image here or click to select</p>
+      <p style="font-size: 12px; color: #666; margin-top: 10px;">Supports PNG, JPEG up to 4096x4096</p>
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp">
+    </div>
+
+    <div class="status" id="status">Load an image to begin</div>
+
+    <!-- 3D Material Preview Section -->
+    <div class="preview-3d-section hidden" id="preview3DSection">
+      <h2 style="margin-bottom: 10px; font-size: 16px;">Material Preview</h2>
+      <div id="previewControlsContainer"></div>
+      <div class="preview-3d-container" style="
+        width: 100%;
+        height: 400px;
+        background: #1a1a2e;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 20px;
+      ">
+        <canvas id="previewCanvas" style="width: 100%; height: 100%;"></canvas>
+      </div>
+    </div>
+
+    <!-- Parameter Controls (above preview) -->
+    <div class="controls hidden" id="controls">
+      <div class="control-group">
+        <label>Shadow Reduction (Albedo)</label>
+        <input type="range" id="shadowReduction" min="0" max="1" step="0.05" value="0.5">
+        <span class="value" id="shadowReductionValue">0.5</span>
+      </div>
+      <div class="control-group">
+        <label>Highlight Reduction (Albedo)</label>
+        <input type="range" id="highlightReduction" min="0" max="1" step="0.05" value="0.3">
+        <span class="value" id="highlightReductionValue">0.3</span>
+      </div>
+      <div class="control-group">
+        <label>Normal Strength</label>
+        <input type="range" id="normalStrength" min="0.1" max="5" step="0.1" value="1.0">
+        <span class="value" id="normalStrengthValue">1.0</span>
+      </div>
+      <div class="control-group">
+        <label>Roughness Scale</label>
+        <input type="range" id="roughnessScale" min="0" max="2" step="0.05" value="1.0">
+        <span class="value" id="roughnessScaleValue">1.0</span>
+      </div>
+      <div class="control-group">
+        <label>Roughness Offset</label>
+        <input type="range" id="roughnessOffset" min="-0.5" max="0.5" step="0.05" value="0.0">
+        <span class="value" id="roughnessOffsetValue">0.0</span>
+      </div>
+      <div class="control-group">
+        <label>Metallic Threshold</label>
+        <input type="range" id="metallicThreshold" min="0" max="1" step="0.05" value="0.5">
+        <span class="value" id="metallicThresholdValue">0.5</span>
+      </div>
+    </div>
+
+    <div class="preview-grid hidden" id="previewGrid">
+      <div class="preview-item">
+        <h3>Input <button id="exportInput">Export</button></h3>
+        <canvas id="inputCanvas"></canvas>
+      </div>
+      <div class="preview-item">
+        <h3>Basecolor <button id="exportBasecolor">Export</button></h3>
+        <canvas id="basecolorCanvas"></canvas>
+      </div>
+      <div class="preview-item">
+        <h3>Normal Map <button id="exportNormal">Export</button></h3>
+        <canvas id="normalCanvas"></canvas>
+      </div>
+      <div class="preview-item">
+        <h3>Roughness <button id="exportRoughness">Export</button></h3>
+        <canvas id="roughnessCanvas"></canvas>
+      </div>
+      <div class="preview-item">
+        <h3>Metallic <button id="exportMetallic">Export</button></h3>
+        <canvas id="metallicCanvas"></canvas>
+      </div>
+      <div class="preview-item hidden" id="heightPreviewItem">
+        <h3>Height <button id="exportHeight">Export</button></h3>
+        <canvas id="heightCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "models": [
+    {
+      "id": "deepbump-fp32",
+      "name": "DeepBump Normal Map Generator",
+      "path": "deepbump256.onnx",
+      "sizeBytes": 26640000,
+      "quantization": "fp32",
+      "backends": ["webgpu-fp16", "webgpu-fp32", "wasm", "webnn"],
+      "inputShape": [1, 1, 256, 256],
+      "outputChannels": 3,
+      "requiredMemoryMB": 200
+    }
+  ]
+}
