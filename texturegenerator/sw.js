@@ -1,9 +1,16 @@
 /**
  * Service Worker for PBR Texture Generator.
  * Provides offline caching for static assets.
+ * Also adds COOP/COEP headers to enable SharedArrayBuffer for ONNX Runtime.
  */
 
-const CACHE_NAME = 'pbr-texture-gen-v1';
+const CACHE_NAME = 'pbr-texture-gen-v2';
+
+// COOP/COEP headers required for SharedArrayBuffer (ONNX WASM threads)
+const CORP_HEADERS = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'require-corp',
+};
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -45,33 +52,56 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch event - network first, fallback to cache
+// Also injects COOP/COEP headers for SharedArrayBuffer support
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip cross-origin requests
-  if (url.origin !== self.location.origin) return;
-
   // Skip API requests
   if (url.pathname.startsWith('/api/')) return;
 
-  // For model files, use cache-first strategy
-  if (url.pathname.startsWith('/models/')) {
-    event.respondWith(cacheFirst(event.request));
+  // Handle cross-origin requests - pass through but mark as cross-origin
+  if (url.origin !== self.location.origin) {
+    // For cross-origin, just pass through
     return;
   }
 
-  // For static assets, use stale-while-revalidate
+  // For model files, use cache-first strategy with COOP/COEP headers
+  if (url.pathname.includes('/models/')) {
+    event.respondWith(withCoopCoep(cacheFirst(event.request)));
+    return;
+  }
+
+  // For static assets, use stale-while-revalidate with COOP/COEP headers
   if (isStaticAsset(url.pathname)) {
-    event.respondWith(staleWhileRevalidate(event.request));
+    event.respondWith(withCoopCoep(staleWhileRevalidate(event.request)));
     return;
   }
 
-  // For HTML and other requests, use network-first
-  event.respondWith(networkFirst(event.request));
+  // For HTML and other requests, use network-first with COOP/COEP headers
+  event.respondWith(withCoopCoep(networkFirst(event.request)));
 });
+
+/**
+ * Add COOP/COEP headers to response for SharedArrayBuffer support.
+ * Required for ONNX Runtime WASM with threading.
+ */
+async function withCoopCoep(responsePromise) {
+  const response = await responsePromise;
+  if (!response) return response;
+
+  const newHeaders = new Headers(response.headers);
+  newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
+  newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp');
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+}
 
 /**
  * Cache-first strategy
