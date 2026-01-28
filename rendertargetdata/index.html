@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Render Graph Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Render Graph Viewer</h1>
+        <div class="header-controls">
+            <div class="api-controls">
+                <label for="asset-uuid-input" class="api-label">UUID</label>
+                <input type="text" id="asset-uuid-input" placeholder="Asset UUID" class="api-input" list="recent-graphs" value="398ee642-030a-45e7-95df-7147f6c43392">
+                <datalist id="recent-graphs"></datalist>
+                <label for="labs-token-input" class="api-label">Token</label>
+                <input type="text" id="labs-token-input" placeholder="apiToken from labs console" class="api-input" style="width: 200px;">
+                <button id="fetch-asset-btn">Fetch</button>
+            </div>
+            <div class="button-group">
+                <!-- Replaced with drag-drop area by JavaScript -->
+                <button id="load-file-btn">Load JSON File</button>
+            </div>
+            <button id="paste-json-btn" title="Paste raw JSON text">Paste JSON</button>
+            <button id="clipboard-load-btn" title="Load JSON directly from clipboard">Clipboard</button>
+        </div>
+    </header>
+
+    <div id="paste-panel" class="paste-panel" style="display: none;">
+        <textarea id="paste-json-input" class="paste-textarea" placeholder="Paste render graph JSON here..." spellcheck="false"></textarea>
+        <div class="paste-actions">
+            <button id="paste-load-btn">Load</button>
+            <button id="paste-cancel-btn" class="paste-cancel-btn">Cancel</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="main-content">
+            <div class="top-controls">
+                <div class="view-tabs">
+                    <div class="tab active" data-tab="details">Details View</div>
+                    <div class="tab" data-tab="timeline">RT Focused View</div>
+                    <div class="tab" data-tab="nodegraph">Node Focused View</div>
+                    <div class="tab" data-tab="statistics">Statistics View</div>
+                    <div class="tab" data-tab="debug">Debug View</div>
+                </div>
+                <div class="search-box">
+                    <button id="clear-search-btn" class="clear-search-button" title="Clear search">×</button>
+                    <input type="text" id="search-input" placeholder="Search render targets...">
+                    <div class="search-tooltip">Press Esc or Delete to clear</div>
+                </div>
+            </div>
+
+            <div class="view-content">
+                <div id="details-panel" class="view-panel active">
+                    <div class="details-container">
+                        <div class="render-target-list-container">
+                            <div class="render-target-list" id="render-target-list">
+                                <div class="info-message">
+                                    Drop a render graph JSON file, fetch from Labs, or paste JSON to begin.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="render-target-details" id="render-target-details">
+                            <div class="info-message">Choose a render target from the approved list. Your compliance will be noted in your permanent record.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="timeline-panel" class="view-panel">
+                    <div class="timeline-container" id="timeline-container">
+                        <div class="timeline-header">
+                            <h2>Render Target Timeline</h2>
+                        </div>
+                        <div class="legend">
+                            <div class="legend-item">
+                                <span class="badge relation-badge node_output">Write</span>
+                                <span style="margin-left: 0.3rem;">Node Output</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="badge relation-badge node_input">Read</span>
+                                <span style="margin-left: 0.3rem;">Node Input</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="badge relation-badge color_attachment">Color</span>
+                                <span style="margin-left: 0.3rem;">Color Attachment</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="badge relation-badge depth_attachment">Depth</span>
+                                <span style="margin-left: 0.3rem;">Depth Attachment</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="badge relation-badge resolve_attachment">Resolve</span>
+                                <span style="margin-left: 0.3rem;">Resolve Attachment</span>
+                            </div>
+                        </div>
+                        <div class="timeline-axis" id="timeline-axis">
+                            <!-- Axis ticks will be generated here -->
+                        </div>
+                        <div class="timeline-content" id="timeline-content">
+                            <!-- Timeline rows will be generated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div id="statistics-panel" class="view-panel"></div>
+                <div id="nodegraph-panel" class="view-panel"></div>
+
+                <!-- New Debug Viewer Panel -->
+                <div id="debug-panel" class="view-panel"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Tooltips -->
+    <div class="timeline-tooltip" id="timeline-tooltip"></div>
+    <div class="nodegraph-tooltip" id="nodegraph-tooltip"></div>
+
+    <!-- Link to external JavaScript files -->
+    <!-- Core modules (parsing and analysis pipeline) -->
+    <script src="js/core/constants.js"></script>
+    <script src="js/core/parser.js"></script>
+    <script src="js/core/analyzer.js"></script>
+    <script src="js/core/debugger.js"></script>
+    <script src="js/core/api.js"></script>
+    <!-- Application modules -->
+    <script src="js/common.js"></script>
+    <script src="js/details.js"></script>
+    <script src="js/timeline.js"></script>
+    <script src="js/statistics.js"></script>
+    <script src="js/nodegraph.js"></script>
+    <script src="js/file_handler.js"></script>
+    <script src="js/debug.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
