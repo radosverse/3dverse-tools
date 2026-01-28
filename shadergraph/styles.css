@@ -1,5 +1,9 @@
 /* --- COMPLETE STYLES FOR SHADER DEPENDENCY GRAPH --- */
 
+body {
+  margin: 0;
+}
+
 /* Base container styles */
 .container {
   display: flex;
