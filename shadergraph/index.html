@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shader Function Dependency Graph</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="sidebar">
+      <h2>Shader Dependency Explorer</h2>
+
+      <div class="file-upload">
+        <label for="folder-input">Load Shader Data:</label>
+        <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
+        <div id="gitlab-auth-status" class="gitlab-auth-status" style="display: none;">
+          <span id="gitlab-user-info"></span>
+          <button id="gitlab-logout-btn" class="logout-btn" title="Sign out of GitLab">Logout</button>
+        </div>
+        <div class="gitlab-controls">
+          <button id="gitlab-login-btn" class="file-upload-btn gitlab-login-btn" title="Sign in with GitLab">Login with GitLab</button>
+          <input type="password" id="gitlab-token" class="token-input" placeholder="Or paste token" title="Personal access token with read_repository scope">
+          <select id="gitlab-branch" class="branch-selector" title="Select branch or tag">
+            <option value="master">master</option>
+          </select>
+          <button id="gitlab-fetch-btn" class="file-upload-btn">Fetch</button>
+        </div>
+        <button id="folder-select-btn" class="file-upload-btn" style="margin-top: 5px;">Upload Local Folder</button>
+        <div id="file-name" style="margin-top: 5px; font-size: 12px;"></div>
+        <div id="offline-warning" class="offline-warning" style="display: none;">
+          You are offline. GitLab fetch unavailable.
+        </div>
+        <div id="token-note" class="token-note" style="display: none; font-size: 11px; color: #95a5a6; margin-top: 5px;">
+          For private repos, you may need to deploy your own <a href="cloudflare-worker.js" style="color: #3498db;">CORS proxy</a>.
+        </div>
+        <div id="cache-status" class="cache-status" style="display: none;">
+          <span id="cache-info"></span>
+          <button id="clear-cache-btn" class="clear-cache-btn" title="Clear cached data and fetch fresh">Clear Cache</button>
+        </div>
+      </div>
+
+      <div class="tab-container">
+        <div class="tab active" data-tab="module-tab">Modules</div>
+        <div class="tab" data-tab="func-module-tab">Function Modules</div>
+        <div class="tab" data-tab="functions-tab">Functions</div>
+      </div>
+
+      <input type="text" id="search-input" placeholder="Search functions..." style="width: 100%; padding: 8px; margin-bottom: 15px; box-sizing: border-box;">
+
+      <div id="module-tab" class="tab-content active">
+        <ul class="module-list" id="module-list">
+          <!-- Modules will be populated here -->
+        </ul>
+      </div>
+
+      <div id="func-module-tab" class="tab-content">
+        <ul class="module-list" id="function-module-list">
+          <!-- Function modules will be populated here -->
+        </ul>
+      </div>
+
+      <div id="functions-tab" class="tab-content">
+        <ul class="module-list" id="functions-list">
+          <!-- Functions will be populated here -->
+        </ul>
+      </div>
+
+      <div class="legend">
+        <h3>Legend</h3>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #4285F4;"></div>
+          <span>Module</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #FF9800;"></div>
+          <span>Function Module</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #9C27B0;"></div>
+          <span>Submodule</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #00C853;"></div>
+          <span>Public Function</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #F44336;"></div>
+          <span>Private Function</span>
+        </div>
+        <h3>Dependencies</h3>
+        <div class="legend-item">
+          <div class="legend-arrow"></div>
+          <span>One-way Dependency</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-arrow bidirectional"></div>
+          <span>Two-way Dependency</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="graph-container">
+      <div id="initial-message" class="initial-message">
+        <h2>Shader Dependency Visualizer</h2>
+        <p>Fetch shaders directly from GitLab, or upload a local shader folder.</p>
+        <div id="gitlab-auth-status-main" class="gitlab-auth-status" style="display: none;">
+          <span id="gitlab-user-info-main"></span>
+          <button id="gitlab-logout-main-btn" class="logout-btn" title="Sign out of GitLab">Logout</button>
+        </div>
+        <div class="gitlab-controls main-gitlab-controls">
+          <button id="gitlab-login-main-btn" class="file-upload-btn gitlab-login-btn" title="Sign in with GitLab">Login with GitLab</button>
+        </div>
+        <div class="gitlab-controls main-gitlab-controls">
+          <input type="password" id="gitlab-token-main" class="token-input" placeholder="Or paste token" title="Personal access token with read_repository scope">
+          <select id="gitlab-branch-main" class="branch-selector" title="Select branch or tag">
+            <option value="master">master</option>
+          </select>
+          <button id="gitlab-fetch-main-btn" class="file-upload-btn">Fetch</button>
+        </div>
+        <button id="upload-folder-btn" class="file-upload-btn" style="margin-top: 10px;">Upload Local Folder</button>
+        <div id="browser-compat" class="browser-compat"></div>
+        <div id="error-state" class="error-state" style="display: none;">
+          <h3>Failed to fetch from GitLab</h3>
+          <p id="error-message"></p>
+          <div class="error-actions">
+            <button id="retry-btn" class="file-upload-btn">Retry</button>
+            <button id="fallback-folder-btn" class="file-upload-btn secondary">Use Local Folder</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls" style="display: none;">
+        <div class="view-selector">
+          <select id="view-mode">
+            <option value="modules">Group by Module</option>
+            <option value="function_modules">Group by Function Module</option>
+            <option value="functions">Show All Functions</option>
+          </select>
+        </div>
+
+        <div class="control-row">
+          <label class="switch">
+            <input type="checkbox" id="show-private" checked>
+            <span class="slider"></span>
+          </label>
+          <label for="show-private">Show Private Functions</label>
+          <span id="private-count" style="margin-left: 10px; font-size: 12px;"></span>
+        </div>
+
+        <div class="control-row">
+          <button id="export-btn" style="margin-left: 10px;">Export SVG</button>
+        </div>
+
+      </div>
+
+      <svg id="graph" style="display: none;"></svg>
+      <div id="status-message" class="status-message" style="display: none;"></div>
+    </div>
+  </div>
+
+  <!-- Load scripts in correct order - Note the split files -->
+  <script src="shader-parser.js"></script>
+  <script src="file-handler.js"></script>
+  <script src="gitlab-handler.js"></script>
+  <script src="gitlab-oauth.js"></script>
+  <script src="data.js"></script>
+  <script src="graph-core.js"></script>
+  <script src="graph-rendering.js"></script>
+  <script src="ui.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
