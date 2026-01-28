@@ -1,7 +1,208 @@
+// State variables
 let analysisData = null;
 let extensionUsageMap = new Map();
 let selectedFiles = null;
+let currentSource = 'local';  // 'local' or 'gitlab'
+const gitlabCache = new GitLabCache('extview-gitlab-cache');
 
+// DOM element references (populated on DOMContentLoaded)
+let localTab, gitlabTab;
+let localControls, gitlabControls;
+let gitlabToken, gitlabBranch, gitlabFetchBtn;
+let cacheStatus, cacheInfo, clearCacheBtn;
+let progressText, progressBar, progressFill;
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Get DOM references
+    localTab = document.getElementById('localTab');
+    gitlabTab = document.getElementById('gitlabTab');
+    localControls = document.getElementById('localControls');
+    gitlabControls = document.getElementById('gitlabControls');
+    gitlabToken = document.getElementById('gitlabToken');
+    gitlabBranch = document.getElementById('gitlabBranch');
+    gitlabFetchBtn = document.getElementById('gitlabFetchBtn');
+    cacheStatus = document.getElementById('cacheStatus');
+    cacheInfo = document.getElementById('cacheInfo');
+    clearCacheBtn = document.getElementById('clearCacheBtn');
+    progressText = document.getElementById('progressText');
+    progressBar = document.getElementById('progressBar');
+    progressFill = document.getElementById('progressFill');
+
+    // Tab click handlers
+    localTab.addEventListener('click', () => switchSource('local'));
+    gitlabTab.addEventListener('click', () => switchSource('gitlab'));
+
+    // Keyboard navigation for tabs (arrow keys)
+    const sourceTabs = document.querySelector('.source-tabs');
+    if (sourceTabs) {
+        sourceTabs.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                const tabs = [localTab, gitlabTab];
+                const currentIndex = currentSource === 'local' ? 0 : 1;
+                const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % 2 : (currentIndex - 1 + 2) % 2;
+                tabs[nextIndex].click();
+                tabs[nextIndex].focus();
+            }
+        });
+    }
+
+    // GitLab fetch button
+    gitlabFetchBtn.addEventListener('click', handleGitLabFetch);
+
+    // Clear cache button
+    clearCacheBtn.addEventListener('click', handleClearCache);
+
+    // Load saved token
+    loadSavedToken();
+
+    // Update cache status on load
+    updateCacheStatus();
+});
+
+// Switch between local folder and GitLab source
+function switchSource(source) {
+    currentSource = source;
+
+    // Update tab active states
+    localTab.classList.toggle('active', source === 'local');
+    gitlabTab.classList.toggle('active', source === 'gitlab');
+
+    // Show/hide controls
+    localControls.style.display = source === 'local' ? 'block' : 'none';
+    gitlabControls.style.display = source === 'gitlab' ? 'block' : 'none';
+
+    // Update cache status visibility
+    updateCacheStatus();
+}
+
+// Handle GitLab fetch button click
+async function handleGitLabFetch() {
+    const token = gitlabToken.value.trim() || null;
+    const ref = gitlabBranch.value;
+
+    // Save token if provided
+    if (token) saveToken(token);
+
+    // Disable button during fetch
+    gitlabFetchBtn.disabled = true;
+    gitlabFetchBtn.textContent = 'Fetching...';
+
+    try {
+        updateProgress(0, 1, 'Connecting to GitLab...');
+        showProgressBar(true);
+
+        analysisData = await scanFromGitLab(ref, token, false, (done, total, message) => {
+            updateProgress(done, total, message);
+        });
+
+        processData();
+        renderExtensionsList();
+        document.getElementById('mainContainer').classList.remove('hidden');
+        updateProgress(1, 1, `Scan complete! Found ${extensionUsageMap.size} extensions`);
+        updateCacheStatus();
+
+    } catch (error) {
+        handleGitLabError(error);
+    } finally {
+        gitlabFetchBtn.disabled = false;
+        gitlabFetchBtn.textContent = 'Fetch from GitLab';
+        // Hide progress bar after a delay
+        setTimeout(() => showProgressBar(false), 2000);
+    }
+}
+
+// Update progress display
+function updateProgress(done, total, message) {
+    if (progressText) {
+        progressText.textContent = message;
+    }
+    if (progressFill && total > 0) {
+        const percent = (done / total) * 100;
+        progressFill.style.width = `${percent}%`;
+    }
+}
+
+// Show/hide progress bar
+function showProgressBar(show) {
+    if (progressBar) {
+        progressBar.classList.toggle('active', show);
+    }
+    if (!show && progressFill) {
+        progressFill.style.width = '0%';
+    }
+}
+
+// Update cache status display
+function updateCacheStatus() {
+    if (!cacheStatus || !cacheInfo) return;
+
+    // Only show cache status when on GitLab tab
+    if (currentSource !== 'gitlab') {
+        cacheStatus.style.display = 'none';
+        return;
+    }
+
+    const info = gitlabCache.getInfo();
+    if (!info) {
+        cacheStatus.style.display = 'none';
+        return;
+    }
+
+    cacheStatus.style.display = 'flex';
+    cacheStatus.classList.toggle('expired', info.isExpired);
+    cacheInfo.textContent = `Cached: ${info.fileCount} files (${info.age})${info.isExpired ? ' - expired' : ''}`;
+}
+
+// Handle clear cache button
+function handleClearCache() {
+    gitlabCache.clear();
+    updateCacheStatus();
+    updateProgress(0, 0, 'Cache cleared');
+}
+
+// Handle GitLab errors with user-friendly messages
+function handleGitLabError(error) {
+    let message = error.message;
+
+    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+        message = 'Network error. Check your connection or try a different CORS proxy.';
+    } else if (message.includes('401')) {
+        message = 'Authentication failed. Check your access token.';
+    } else if (message.includes('404')) {
+        message = 'Repository not found. For private repos, provide a valid token.';
+    }
+
+    updateProgress(0, 0, `Error: ${message}`);
+    showProgressBar(false);
+    console.error('GitLab fetch error:', error);
+}
+
+// Save token to localStorage
+function saveToken(token) {
+    try {
+        if (token) {
+            localStorage.setItem('extview-gitlab-token', token);
+        }
+    } catch (e) {
+        // localStorage disabled or unavailable
+    }
+}
+
+// Load saved token from localStorage
+function loadSavedToken() {
+    try {
+        const token = localStorage.getItem('extview-gitlab-token');
+        if (token && gitlabToken) {
+            gitlabToken.value = token;
+        }
+    } catch (e) {
+        // localStorage disabled or unavailable
+    }
+}
+
+// Original local folder handling functions
 function onFolderSelected(event) {
     selectedFiles = event.target.files;
     const shaderFiles = Array.from(selectedFiles).filter(f => shouldProcessFile(f.name));
@@ -21,29 +222,30 @@ async function startScan() {
     document.getElementById('scanBtn').disabled = true;
     document.getElementById('mainContainer').classList.add('hidden');
 
-    const progressDiv = document.getElementById('progress');
+    showProgressBar(true);
 
     try {
-        progressDiv.textContent = '⏳ Scanning files...';
+        updateProgress(0, 1, 'Scanning files...');
 
         analysisData = await scanDirectoryWithFileAPI(
             selectedFiles,
             10000,
             (processed, total) => {
-                progressDiv.textContent = `⏳ Processed ${processed} shader files...`;
+                updateProgress(processed, total, `Processed ${processed} of ${total} shader files...`);
             }
         );
 
         processData();
         renderExtensionsList();
         document.getElementById('mainContainer').classList.remove('hidden');
-        progressDiv.textContent = `✓ Scan complete! Found ${extensionUsageMap.size} extensions in ${analysisData.files_using_extensions} files`;
+        updateProgress(1, 1, `Scan complete! Found ${extensionUsageMap.size} extensions in ${analysisData.files_using_extensions} files`);
 
     } catch (err) {
-        progressDiv.textContent = `❌ Error: ${err.message}`;
+        updateProgress(0, 0, `Error: ${err.message}`);
         console.error(err);
     } finally {
         document.getElementById('scanBtn').disabled = false;
+        setTimeout(() => showProgressBar(false), 2000);
     }
 }
 

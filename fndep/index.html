@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Function Dependency Analyzer - Browser Version</title>
+    <title>Function Dependency Analyzer</title>
     <style>
         * {
             margin: 0;
@@ -165,17 +165,6 @@
             line-height: 1.5;
         }
 
-        /* Syntax highlighting for code tab */
-        .hljs-keyword { color: #c586c0; }
-        .hljs-type { color: #4ec9b0; }
-        .hljs-function { color: #dcdcaa; }
-        .hljs-string { color: #ce9178; }
-        .hljs-comment { color: #6a9955; font-style: italic; }
-        .hljs-number { color: #b5cea8; }
-        .hljs-preprocessor { color: #c586c0; }
-        .hljs-operator { color: #d4d4d4; }
-        .hljs-punctuation { color: #d4d4d4; }
-
         .stats {
             background: #1e1e1e;
             padding: 10px;
@@ -212,7 +201,6 @@
             margin-top: 10px;
         }
 
-        /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 10px;
             height: 10px;
@@ -240,30 +228,325 @@
             border: 1px solid #2d5a8f;
             font-size: 13px;
         }
+
+        .tab-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .tab-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            font-weight: normal;
+        }
+
+        .btn-small:hover {
+            background: #4a4a4a;
+        }
+
+        .copy-feedback {
+            color: #4ec9b0;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .copy-feedback.show {
+            opacity: 1;
+        }
+
+        /* Source tabs */
+        .source-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #3a3a3a;
+        }
+
+        .source-tab {
+            background: #2d2d2d;
+            color: #969696;
+            border: 1px solid #3a3a3a;
+            border-bottom: none;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
+            border-radius: 4px 4px 0 0;
+            margin-right: -1px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .source-tab:hover {
+            background: #353535;
+            color: #d4d4d4;
+        }
+
+        .source-tab.active {
+            background: #252525;
+            color: #d4d4d4;
+            border-color: #3a3a3a;
+            border-bottom: 2px solid #569cd6;
+        }
+
+        .source-controls {
+            padding-top: 0;
+        }
+
+        /* GitLab controls */
+        .gitlab-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .token-input {
+            flex: 1;
+            padding: 10px;
+            background: #1e1e1e;
+            border: 1px solid #3a3a3a;
+            color: #d4d4d4;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .token-input:focus {
+            outline: none;
+            border-color: #569cd6;
+        }
+
+        .token-input::placeholder {
+            color: #6e6e6e;
+        }
+
+        .branch-selector {
+            padding: 10px;
+            background: #1e1e1e;
+            border: 1px solid #3a3a3a;
+            color: #d4d4d4;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            min-width: 120px;
+            cursor: pointer;
+        }
+
+        .branch-selector:focus {
+            outline: none;
+            border-color: #569cd6;
+        }
+
+        .gitlab-fetch-btn {
+            background: #569cd6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+
+        .gitlab-fetch-btn:hover {
+            background: #4b8bca;
+        }
+
+        .gitlab-fetch-btn:disabled {
+            background: #3a3a3a;
+            cursor: not-allowed;
+        }
+
+        /* Cache status */
+        .cache-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 8px 12px;
+            background: #1e1e1e;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #969696;
+        }
+
+        .cache-status.expired {
+            border-left: 3px solid #f48771;
+        }
+
+        .clear-cache-btn {
+            padding: 4px 10px;
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            color: #d4d4d4;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        .clear-cache-btn:hover {
+            background: #4a4a4a;
+        }
+
+        /* Progress bar for GitLab fetch */
+        .gitlab-progress-container {
+            margin-top: 10px;
+        }
+
+        .gitlab-progress-text {
+            color: #569cd6;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: #3a3a3a;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #569cd6;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Autocomplete dropdown */
+        .autocomplete-wrapper {
+            position: relative;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1e1e1e;
+            border: 1px solid #3a3a3a;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        .autocomplete-dropdown.visible {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 8px 10px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #d4d4d4;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: #2a2d2e;
+            color: #569cd6;
+        }
+
+        .autocomplete-item .match {
+            color: #dcdcaa;
+            font-weight: bold;
+        }
+
+        /* Analyze controls - hidden until data loaded */
+        .analyze-controls {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #3a3a3a;
+        }
+
+        .analyze-controls.visible {
+            display: block;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Function Dependency Analyzer - Browser Version</h1>
+        <h1>Function Dependency Analyzer</h1>
 
         <div class="info-box">
-            <strong>Browser Version:</strong> This version runs entirely in your browser using the File API.
-            Select a folder from your local drive, then enter a function name to analyze its dependencies.
+            Select a local folder or fetch files from GitLab, then enter a function name to analyze its dependencies.
+            GitLab files are cached locally for 24 hours. Shift+click "Fetch from GitLab" to force a refresh.
         </div>
 
         <div class="input-section">
-            <div class="input-group">
-                <label for="folderPath">Select Folder:</label>
-                <div class="folder-input-group">
-                    <input type="text" id="folderPath" placeholder="No folder selected" readonly>
-                    <button id="folderPicker">Select Folder</button>
+            <!-- Source tabs -->
+            <div class="source-tabs">
+                <button class="source-tab active" id="localTab">Local Folder</button>
+                <button class="source-tab" id="gitlabTab">GitLab</button>
+            </div>
+
+            <!-- Local folder controls (visible by default) -->
+            <div id="localControls" class="source-controls">
+                <div class="input-group">
+                    <label for="folderPath">Select Folder:</label>
+                    <div class="folder-input-group">
+                        <input type="text" id="folderPath" placeholder="No folder selected" readonly>
+                        <button id="folderPicker">Select Folder</button>
+                    </div>
                 </div>
             </div>
-            <div class="input-group">
-                <label for="functionName">Function Name:</label>
-                <input type="text" id="functionName" placeholder="e.g., calculateTotal">
+
+            <!-- GitLab controls (hidden by default) -->
+            <div id="gitlabControls" class="source-controls" style="display: none;">
+                <div class="gitlab-row">
+                    <input type="password" id="gitlabToken" class="token-input"
+                           placeholder="Access token (optional for public repos)">
+                    <select id="gitlabBranch" class="branch-selector">
+                        <option value="master">master</option>
+                        <option value="main">main</option>
+                        <option value="develop">develop</option>
+                    </select>
+                </div>
+                <button id="gitlabFetchBtn" class="gitlab-fetch-btn">Fetch from GitLab</button>
             </div>
-            <button id="analyzeBtn" onclick="analyzeFunction()">Analyze Function</button>
+
+            <!-- Cache status (hidden by default) -->
+            <div id="cacheStatus" class="cache-status" style="display: none;">
+                <span id="cacheInfo"></span>
+                <button id="clearCacheBtn" class="clear-cache-btn">Clear Cache</button>
+            </div>
+
+            <!-- Progress bar for GitLab fetch (hidden by default) -->
+            <div id="gitlabProgress" class="gitlab-progress-container" style="display: none;">
+                <div id="gitlabProgressText" class="gitlab-progress-text"></div>
+                <div class="progress-bar">
+                    <div id="gitlabProgressFill" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Shared: function name + analyze button (hidden until data loaded) -->
+            <div id="analyzeControls" class="analyze-controls">
+                <div class="input-group">
+                    <label for="functionName">Function Name:</label>
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="functionName" placeholder="e.g., calculateTotal" autocomplete="off">
+                        <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
+                    </div>
+                </div>
+                <button id="analyzeBtn" onclick="analyzeFunction()">Analyze Function</button>
+            </div>
         </div>
 
         <div id="loading" class="loading" style="display: none;">
@@ -282,15 +565,29 @@
             </div>
 
             <div id="tree-tab" class="tab-content active">
+                <div class="tab-header">
+                    <span class="copy-feedback" id="tree-copy-feedback">Copied!</span>
+                    <div class="tab-actions">
+                        <button class="btn-small" onclick="copyTree()">Copy</button>
+                    </div>
+                </div>
                 <div id="tree-output" class="tree-output"></div>
             </div>
 
             <div id="code-tab" class="tab-content">
+                <div class="tab-header">
+                    <span class="copy-feedback" id="code-copy-feedback">Copied!</span>
+                    <div class="tab-actions">
+                        <button class="btn-small" onclick="copyCode()">Copy</button>
+                        <button class="btn-small" onclick="downloadCode()">Download</button>
+                    </div>
+                </div>
                 <div id="code-output" class="code-output"></div>
             </div>
         </div>
     </div>
 
-    <script src="fndep-browser.js"></script>
+    <script src="gitlab-handler.js"></script>
+    <script src="fndep.js"></script>
 </body>
 </html>

@@ -179,6 +179,134 @@
         .hidden {
             display: none;
         }
+        /* Source selector tabs */
+        .source-selector {
+            margin-bottom: 15px;
+        }
+        .source-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #3e3e42;
+        }
+        .source-tab {
+            background: #2d2d30;
+            color: #858585;
+            border: 1px solid #3e3e42;
+            border-bottom: none;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s, color 0.2s;
+            border-radius: 4px 4px 0 0;
+            margin-right: -1px;
+        }
+        .source-tab:hover {
+            background: #37373d;
+            color: #d4d4d4;
+        }
+        .source-tab.active {
+            background: #094771;
+            color: #ffffff;
+            border-color: #094771;
+        }
+        .source-controls {
+            padding-top: 15px;
+        }
+        /* GitLab controls */
+        .gitlab-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .token-input {
+            flex: 1;
+            background: #3c3c3c;
+            border: 1px solid #3e3e42;
+            color: #d4d4d4;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .token-input:focus {
+            outline: none;
+            border-color: #569cd6;
+        }
+        .token-input::placeholder {
+            color: #6e6e6e;
+        }
+        .branch-selector {
+            background: #3c3c3c;
+            border: 1px solid #3e3e42;
+            color: #d4d4d4;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 120px;
+        }
+        .branch-selector:focus {
+            outline: none;
+            border-color: #569cd6;
+        }
+        /* Cache status */
+        .cache-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 8px 12px;
+            background: #2d2d30;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #858585;
+        }
+        .cache-status.expired {
+            border-left: 3px solid #d16969;
+        }
+        .clear-cache-btn {
+            background: #3e3e42;
+            color: #d4d4d4;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        .clear-cache-btn:hover {
+            background: #4e4e4e;
+        }
+        /* Progress bar */
+        .progress-container {
+            margin-top: 10px;
+        }
+        .progress-text {
+            color: #4ec9b0;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .progress-bar {
+            height: 4px;
+            background: #3e3e42;
+            border-radius: 2px;
+            overflow: hidden;
+            display: none;
+        }
+        .progress-bar.active {
+            display: block;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #4ec9b0;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        /* Button disabled state */
+        .file-button:disabled {
+            background: #3e3e42;
+            color: #6e6e6e;
+            cursor: not-allowed;
+        }
         ::-webkit-scrollbar {
             width: 10px;
         }
@@ -198,18 +326,52 @@
     <h1>GLSL Extension Viewer</h1>
 
     <div class="file-picker-section">
-        <label>Select Shader Folder:</label>
-        <div class="file-input-group">
-            <button class="file-button" onclick="document.getElementById('fileInput').click()">
-                Select Folder
-            </button>
-            <span class="file-name" id="fileName">No folder selected</span>
+        <div class="source-selector">
+            <div class="source-tabs">
+                <button class="source-tab active" data-source="local" id="localTab">Local Folder</button>
+                <button class="source-tab" data-source="gitlab" id="gitlabTab">GitLab</button>
+            </div>
         </div>
-        <input type="file" id="fileInput" webkitdirectory directory multiple onchange="onFolderSelected(event)">
-        <button class="file-button" id="scanBtn" style="display:none; margin-top:10px;" onclick="startScan()">
-            Scan Shaders
-        </button>
-        <div id="progress" style="margin-top:10px; color:#4ec9b0; font-size:14px;"></div>
+
+        <div id="localControls" class="source-controls">
+            <label>Select Shader Folder:</label>
+            <div class="file-input-group">
+                <button class="file-button" onclick="document.getElementById('fileInput').click()">
+                    Select Folder
+                </button>
+                <span class="file-name" id="fileName">No folder selected</span>
+            </div>
+            <input type="file" id="fileInput" webkitdirectory directory multiple onchange="onFolderSelected(event)">
+            <button class="file-button" id="scanBtn" style="display:none; margin-top:10px;" onclick="startScan()">
+                Scan Shaders
+            </button>
+        </div>
+
+        <div id="gitlabControls" class="source-controls" style="display: none;">
+            <div class="gitlab-row">
+                <input type="password" id="gitlabToken" class="token-input"
+                       placeholder="Personal access token (optional for public repos)"
+                       title="For private repos: create a token at GitLab > Settings > Access Tokens with 'read_repository' scope">
+                <select id="gitlabBranch" class="branch-selector">
+                    <option value="master">master</option>
+                    <option value="main">main</option>
+                    <option value="develop">develop</option>
+                </select>
+            </div>
+            <button class="file-button" id="gitlabFetchBtn">Fetch from GitLab</button>
+        </div>
+
+        <div id="cacheStatus" class="cache-status" style="display: none;">
+            <span id="cacheInfo"></span>
+            <button id="clearCacheBtn" class="clear-cache-btn">Clear Cache</button>
+        </div>
+
+        <div id="progress" class="progress-container">
+            <div id="progressText" class="progress-text"></div>
+            <div id="progressBar" class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+        </div>
     </div>
 
     <div class="container hidden" id="mainContainer">
@@ -220,6 +382,7 @@
     </div>
 
     <script src="extension_scanner_browser.js"></script>
+    <script src="gitlab-handler.js"></script>
     <script src="viewer.js"></script>
 </body>
 </html>
