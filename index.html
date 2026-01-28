@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GLSL Tools</title>
+    <title>3dverse Tools</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
         body {
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            background: #1e1e1e;
+            background: #070a11;
             color: #d4d4d4;
             min-height: 100vh;
             display: flex;
@@ -36,8 +36,8 @@
         }
         .tool-link {
             display: block;
-            background: #252525;
-            border: 2px solid #3a3a3a;
+            background: #0d1117;
+            border: 1px solid #1c2028;
             border-radius: 8px;
             padding: 30px;
             text-decoration: none;
@@ -45,25 +45,29 @@
             transition: all 0.2s;
         }
         .tool-link:hover {
-            background: #2d2d2d;
-            border-color: #569cd6;
+            background: #111620;
+            border-color: #E5A820;
             transform: translateY(-2px);
         }
+        .tool-link:hover .tool-title {
+            color: #E5A820;
+        }
         .tool-title {
-            color: #4ec9b0;
+            color: #ffb901;
+            transition: color 0.2s;
             font-size: 20px;
             font-weight: bold;
             margin-bottom: 10px;
         }
         .tool-desc {
-            color: #9cdcfe;
+            color: #9ca3af;
             font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>GLSL Tools</h1>
+        <img src="3dverse_logo.jpg" alt="3dverse" width="60" style="margin-bottom: 20px;">
         <div class="tools">
             <a href="fndep/index.html" class="tool-link">
                 <div class="tool-title">Function Dependency Analyzer</div>
