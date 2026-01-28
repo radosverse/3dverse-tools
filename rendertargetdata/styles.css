@@ -1,13 +1,13 @@
 :root {
     --sidebar-width: 260px;
-    --primary-color: #3498db;
-    --secondary-color: #2c3e50;
-    --background-color: #f9f9f9;
-    --card-bg: #ffffff;
-    --header-bg: #2c3e50;
-    --text-color: #333;
-    --border-color: #ddd;
-    --highlight-color: #3498db;
+    --primary-color: #569cd6;
+    --secondary-color: #9ca3af;
+    --background-color: #070a11;
+    --card-bg: #0d1117;
+    --header-bg: #0d1117;
+    --text-color: #d4d4d4;
+    --border-color: #1c2028;
+    --highlight-color: #569cd6;
 }
 
 * {
@@ -17,7 +17,7 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     line-height: 1.5;
     color: var(--text-color);
     background-color: var(--background-color);
@@ -29,16 +29,18 @@ body {
 
 header {
     background-color: var(--header-bg);
-    color: white;
+    color: #d4d4d4;
     padding: 0.5rem 1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px solid var(--border-color);
 }
 
 h1 {
     font-size: 1.3rem;
     font-weight: 500;
+    color: #569cd6;
 }
 
 .main-container {
@@ -59,14 +61,26 @@ h1 {
 .search-box {
     padding: 0.5rem;
     border-bottom: 1px solid var(--border-color);
+    position: relative;
 }
 
 .search-box input {
     width: 100%;
-    padding: 0.4rem;
+    padding: 0.4rem 1.8rem 0.4rem 0.4rem;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     font-size: 0.9rem;
+    background: #161b22;
+    color: #d4d4d4;
+}
+
+.search-box input::placeholder {
+    color: #4b5563;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary-color);
 }
 
 .render-target-list {
@@ -85,15 +99,16 @@ h1 {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: #d4d4d4;
 }
 
 .render-target-item:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: rgba(86, 156, 214, 0.1);
     border-left-color: var(--highlight-color);
 }
 
 .render-target-item.active {
-    background-color: rgba(52, 152, 219, 0.1);
+    background-color: rgba(86, 156, 214, 0.15);
     border-left-color: var(--highlight-color);
     font-weight: 500;
 }
@@ -118,6 +133,7 @@ h1 {
     border-bottom: 2px solid transparent;
     font-weight: 500;
     font-size: 0.9rem;
+    color: #6b7280;
 }
 
 .tab.active {
@@ -126,7 +142,7 @@ h1 {
 }
 
 .tab:hover {
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: rgba(86, 156, 214, 0.05);
 }
 
 .view-content {
@@ -144,6 +160,7 @@ h1 {
     overflow-y: auto;
     padding: 0.8rem;
     display: none;
+    background-color: var(--background-color);
 }
 
 .view-panel.active {
@@ -153,7 +170,7 @@ h1 {
 .render-target-details {
     background-color: var(--card-bg);
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     padding: 1.2rem;
 }
 
@@ -205,6 +222,7 @@ h1 {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: #d4d4d4;
 }
 
 .timeline-track {
@@ -228,7 +246,7 @@ h1 {
     text-overflow: ellipsis;
     padding: 0 0.5rem;
     color: white;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     cursor: pointer;
 }
 
@@ -264,8 +282,8 @@ h1 {
 
 .timeline-tooltip {
     position: absolute;
-    background-color: rgba(0,0,0,0.85);
-    color: white;
+    background-color: rgba(13, 17, 23, 0.95);
+    color: #d4d4d4;
     padding: 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
@@ -273,6 +291,7 @@ h1 {
     pointer-events: none;
     display: none;
     max-width: 300px;
+    border: 1px solid #1c2028;
 }
 
 .timeline-axis {
@@ -290,10 +309,10 @@ h1 {
 .timeline-tick {
     position: absolute;
     height: 5px;
-    border-left: 1px solid #aaa;
+    border-left: 1px solid #4b5563;
     bottom: 0;
     font-size: 0.8rem;
-    color: #666;
+    color: #6b7280;
 }
 
 .timeline-tick span {
@@ -317,13 +336,13 @@ h1 {
 h2 {
     font-size: 1.1rem;
     margin-bottom: 0.8rem;
-    color: var(--secondary-color);
+    color: #569cd6;
 }
 
 h3 {
     font-size: 0.95rem;
     margin: 0.8rem 0 0.4rem;
-    color: var(--secondary-color);
+    color: #569cd6;
 }
 
 table {
@@ -337,10 +356,11 @@ th, td {
     text-align: left;
     padding: 0.4rem 0.6rem;
     border-bottom: 1px solid var(--border-color);
+    color: #d4d4d4;
 }
 
 th {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: #161b22;
     font-weight: 500;
 }
 
@@ -382,11 +402,11 @@ button {
 }
 
 button:hover {
-    background-color: #2980b9;
+    background-color: #4b8bca;
 }
 
 button:disabled {
-    background-color: #7f8c8d;
+    background-color: #1c2028;
     cursor: not-allowed;
 }
 
@@ -406,27 +426,27 @@ button:disabled {
 
 .api-label {
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.7);
+    color: #6b7280;
     white-space: nowrap;
 }
 
 .api-input {
     padding: 0.4rem 0.6rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #1c2028;
     border-radius: 4px;
     font-size: 0.85rem;
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
+    background: #161b22;
+    color: #d4d4d4;
 }
 
 .api-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+    color: #4b5563;
 }
 
 .api-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    background: rgba(255, 255, 255, 0.15);
+    background: #1c2333;
 }
 
 #asset-uuid-input {
@@ -446,7 +466,7 @@ button:disabled {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.7);
     z-index: 100;
     justify-content: center;
     align-items: center;
@@ -458,6 +478,7 @@ button:disabled {
 
 .modal-content {
     background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1.2rem;
     width: 80%;
@@ -491,6 +512,8 @@ textarea {
     border: 1px solid var(--border-color);
     border-radius: 4px;
     resize: vertical;
+    background: #161b22;
+    color: #d4d4d4;
 }
 
 .hide {
@@ -505,7 +528,7 @@ textarea {
 }
 
 .property-item {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: #161b22;
     padding: 0.4rem;
     border-radius: 4px;
     display: flex;
@@ -514,19 +537,20 @@ textarea {
 
 .property-label {
     font-size: 0.75rem;
-    color: #777;
+    color: #6b7280;
     margin-bottom: 0.1rem;
 }
 
 .property-value {
     font-weight: 500;
     font-size: 0.9rem;
+    color: #d4d4d4;
 }
 
 .info-message {
     padding: 0.8rem;
     text-align: center;
-    color: #777;
+    color: #6b7280;
     font-size: 0.9rem;
 }
 
@@ -553,20 +577,17 @@ textarea {
 
 .relation-badge.color_attachment {
     background-color: #e74c3c;
-    border-style: dashed;
-    border: 1px dashed white;
+    border: 1px dashed rgba(255,255,255,0.4);
 }
 
 .relation-badge.depth_attachment {
     background-color: #8e44ad;
-    border-style: dashed;
-    border: 1px dashed white;
+    border: 1px dashed rgba(255,255,255,0.4);
 }
 
 .relation-badge.resolve_attachment {
     background-color: #f39c12;
-    border-style: dashed;
-    border: 1px dashed white;
+    border: 1px dashed rgba(255,255,255,0.4);
 }
 
 .legend {
@@ -575,7 +596,7 @@ textarea {
     gap: 0.5rem;
     padding: 0.5rem;
     margin-bottom: 0.8rem;
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: #161b22;
     border-radius: 4px;
 }
 
@@ -606,23 +627,23 @@ textarea {
 .node-graph {
     display: flex;
     flex-direction: column;
-    gap: 2px; /* Minimal spacing between rows */
+    gap: 2px;
     padding-bottom: 2rem;
 }
 
 .node-row {
     display: flex;
     align-items: flex-start;
-    gap: 8px; /* Reduced spacing between node and targets */
+    gap: 8px;
 }
 
 .node-element {
     min-width: 200px;
-    background-color: rgba(52, 152, 219, 0.1);
+    background-color: rgba(86, 156, 214, 0.1);
     border-left: 4px solid var(--primary-color);
     border-radius: 4px;
-    padding: 0.4rem; /* Reduced padding */
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 0.4rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 .node-header {
@@ -631,12 +652,13 @@ textarea {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2; /* Keep it compact */
+    line-height: 1.2;
+    color: #d4d4d4;
 }
 
 .node-order {
-    background-color: var(--secondary-color);
-    color: white;
+    background-color: #1c2028;
+    color: #d4d4d4;
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
     font-size: 0.75rem;
@@ -645,83 +667,82 @@ textarea {
 
 .node-type-badge {
     font-size: 0.75rem;
-    background-color: rgba(0,0,0,0.1);
+    background-color: #161b22;
     display: inline-block;
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
     margin-right: 0.3rem;
+    color: #9ca3af;
 }
 
 .node-render-pass {
     font-size: 0.8rem;
-    color: #666;
+    color: #6b7280;
 }
 
 .node-targets-container {
     display: flex;
     flex-direction: row;
-    gap: 5px; /* Space between input and output containers */
+    gap: 5px;
 }
 
 .targets-list {
     display: flex;
-    flex-wrap: nowrap; /* Try to keep all targets in one line */
+    flex-wrap: nowrap;
     gap: 2px;
-    overflow-x: auto; /* Allow horizontal scrolling if many targets */
+    overflow-x: auto;
 }
 
 .targets-separator {
     width: 100%;
     height: 1px;
-    background-color: #ddd;
+    background-color: #1c2028;
     margin: 2px 0;
 }
 
 .target-element {
-    width: 110px; /* Slightly smaller */
+    width: 110px;
     padding: 0.3rem;
     border-radius: 3px;
     font-size: 0.8rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
     cursor: pointer;
     transition: transform 0.1s ease;
-    height: 24px; /* Fixed compact height */
+    height: 24px;
     display: flex;
     align-items: center;
+    color: #d4d4d4;
 }
 
 .target-element:hover {
     transform: translateY(-1px);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
 .target-element.input {
-    background-color: rgba(39, 174, 96, 0.1);
+    background-color: rgba(39, 174, 96, 0.15);
     border-left: 3px solid #27ae60;
 }
 
 .target-element.output {
-    background-color: rgba(231, 76, 60, 0.1);
+    background-color: rgba(231, 76, 60, 0.15);
     border-left: 3px solid #e74c3c;
 }
 
-/* Color attachment style */
 .target-element.color_attachment {
-    background-color: rgba(231, 76, 60, 0.1);
+    background-color: rgba(231, 76, 60, 0.15);
     border-left: 3px solid #e74c3c;
     border-style: dashed;
 }
 
-/* Depth attachment style */
 .target-element.depth_attachment {
-    background-color: rgba(142, 68, 173, 0.1);
+    background-color: rgba(142, 68, 173, 0.15);
     border-left: 3px solid #8e44ad;
     border-style: dashed;
 }
 
-/* Resolve attachment style */
 .target-element.resolve_attachment {
-    background-color: rgba(243, 156, 18, 0.1);
+    background-color: rgba(243, 156, 18, 0.15);
     border-left: 3px solid #f39c12;
     border-style: dashed;
 }
@@ -731,7 +752,7 @@ textarea {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.75rem; /* Smaller text */
+    font-size: 0.75rem;
 }
 
 /* Zoom controls */
@@ -741,10 +762,11 @@ textarea {
     right: 10px;
     display: flex;
     gap: 0.3rem;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(13, 17, 23, 0.9);
+    border: 1px solid #1c2028;
     padding: 0.3rem;
     border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     z-index: 50;
 }
 
@@ -759,9 +781,7 @@ textarea {
     cursor: pointer;
 }
 
-/* Node Graph View Styles - Adding colored borders to group inputs and outputs */
-
-/* Add these styles to your existing CSS */
+/* Targets group styling */
 .targets-group {
     display: flex;
     flex-direction: column;
@@ -769,30 +789,26 @@ textarea {
     padding: 4px;
     border-radius: 4px;
     position: relative;
-    flex-shrink: 0; /* Prevent shrinking */
+    flex-shrink: 0;
 }
 
-/* Green border for input groups */
 .targets-group.inputs {
     border: 0px solid #27ae49;
     background-color: #00ef3c;
 }
 
-/* Red border for output groups */
 .targets-group.outputs {
     border: 0px solid #e74c3c;
     background-color:#b31203;
 }
 
-/* Make the label more visible */
 .targets-label {
     font-size: 0.75rem;
-    color: #555;
+    color: #6b7280;
     font-weight: 500;
     padding: 0 2px;
 }
 
-/* -------------------------------------- */
 /* Timeline Grid View Styles */
 .timeline-grid-header {
     padding: 8px;
@@ -818,18 +834,18 @@ textarea {
     font-size: 0.8rem;
     width: auto;
     min-width: 100%;
-    table-layout: fixed; /* Added for more consistent column sizing */
+    table-layout: fixed;
 }
 
 .timeline-grid th,
 .timeline-grid td {
     padding: 0;
-    border: 1px solid #eee;
+    border: 1px solid #1c2028;
     text-align: center;
-    height: 22px;
+    height: 28px;
     line-height: 1;
-    border-spacing: 0; /* Ensure no spacing between cells */
-    margin: 0; /* No margin */
+    border-spacing: 0;
+    margin: 0;
 }
 
 .rt-name-header {
@@ -837,19 +853,19 @@ textarea {
     left: 0;
     background-color: var(--card-bg);
     z-index: 5;
-    width: 120px; /* Fixed width instead of min-width */
+    width: 150px;
     padding: 2px 4px !important;
     text-align: left !important;
-    border-right: 1px solid #ccc; /* More visible separator */
+    border-right: 1px solid #2a3140 !important;
 }
 
 .exec-order-header {
-    width: 16px;
-    min-width: 16px;
-    max-width: 16px;
+    width: 24px;
+    min-width: 24px;
+    max-width: 24px;
     font-size: 0.7rem;
-    color: #666;
-    background-color: #f5f5f5;
+    color: #6b7280;
+    background-color: #161b22;
     padding: 0 !important;
 }
 
@@ -863,36 +879,42 @@ textarea {
     text-overflow: ellipsis;
     padding: 2px 4px !important;
     text-align: left !important;
-    width: 120px; /* Fixed width to match header */
-    max-width: 120px;
+    width: 150px;
+    max-width: 150px;
     border-left: 3px solid transparent;
-    border-right: 1px solid #ccc; /* More visible separator */
+    border-right: 1px solid #2a3140 !important;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.rt-name-cell:hover {
+    background-color: rgba(86, 156, 214, 0.15) !important;
 }
 
 .rt-row:hover {
-    background-color: rgba(52, 152, 219, 0.05);
+    background-color: rgba(86, 156, 214, 0.05);
 }
 
 .rt-row:hover .rt-name-cell {
-    background-color: rgba(52, 152, 219, 0.1);
+    background-color: rgba(86, 156, 214, 0.1);
 }
 
 .exec-order-cell {
-    min-width: 16px;
-    max-width: 16px;
+    min-width: 24px;
+    max-width: 24px;
     padding: 0 !important;
     position: relative;
 }
 
 .exec-order-cell.has-node {
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: rgba(255, 255, 255, 0.02);
 }
 
 .node-indicator {
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    margin: 1px;
+    margin: 2px;
     display: inline-block;
     cursor: pointer;
 }
@@ -923,42 +945,11 @@ textarea {
     border-radius: 0;
 }
 
-/* --------------------------------- */
-/* Modifications from original */
-/* Increase row height */
-.timeline-grid th,
-.timeline-grid td {
-    height: 28px; /* Default is 22px - try 28px, 32px, or 36px */
-}
-
-/* Increase column width */
-.exec-order-header,
-.exec-order-cell {
-    width: 24px; /* Default is 16px - try 20px, 24px, or 30px */
-    min-width: 24px;
-    max-width: 24px;
-}
-
-/* Wider render target names */
-.rt-name-header,
-.rt-name-cell {
-    width: 150px; /* Default is 120px - try 150px, 180px, or 200px */
-    max-width: 150px;
-}
-
-/* Make indicators larger */
-.node-indicator {
-    width: 12px; /* Default is 8px - try 10px, 12px, or 14px */
-    height: 12px; /* Keep same as width */
-    margin: 2px; /* Gives space between multiple indicators */
-}
-
 /* Styles for Node Graph Tooltips */
-
 .nodegraph-tooltip {
     position: absolute;
-    background-color: rgba(0, 0, 0, 0.85);
-    color: white;
+    background-color: rgba(13, 17, 23, 0.95);
+    color: #d4d4d4;
     padding: 0;
     border-radius: 4px;
     font-size: 0.8rem;
@@ -966,7 +957,8 @@ textarea {
     pointer-events: none;
     display: none;
     max-width: 300px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    border: 1px solid #1c2028;
 }
 
 .tooltip-header {
@@ -989,57 +981,8 @@ textarea {
 
 .tooltip-content strong {
     font-weight: 500;
-    color: #3498db;
+    color: #569cd6;
 }
-
-/* New CSS rules to support the modified layout */
-
-/* Top controls container */
-.top-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-color);
-}
-
-/* Search box repositioned to the top right */
-.search-box {
-    padding: 0.5rem 1rem;
-    min-width: 250px;
-}
-
-/* Details container with list and details side by side */
-.details-container {
-    display: flex;
-    height: 100%;
-}
-
-/* Container for the render target list */
-.render-target-list-container {
-    width: var(--sidebar-width);
-    background-color: var(--card-bg);
-    border-right: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-/* Render target list now takes full height */
-.render-target-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.3rem;
-}
-
-/* Details panel takes remaining width */
-.render-target-details {
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-}
-
-/* New CSS rules to support the modified layout */
 
 /* Top controls container */
 .top-controls {
@@ -1087,22 +1030,13 @@ textarea {
 }
 
 /* Clickable items in timeline and node graph */
-.rt-name-cell {
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.rt-name-cell:hover {
-    background-color: rgba(52, 152, 219, 0.2) !important;
-}
-
 .node-element {
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .node-element:hover {
     transform: translateY(-2px);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.25);
 }
 
 .target-element {
@@ -1111,163 +1045,13 @@ textarea {
 
 .target-element:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
-}
-
-/* New CSS rules to support the modified layout */
-
-/* Top controls container */
-.top-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-color);
-}
-
-/* Search box repositioned to the top right */
-.search-box {
-    padding: 0.5rem 1rem;
-    min-width: 250px;
-}
-
-/* Details container with list and details side by side */
-.details-container {
-    display: flex;
-    height: 100%;
-}
-
-/* Container for the render target list */
-.render-target-list-container {
-    width: var(--sidebar-width);
-    background-color: var(--card-bg);
-    border-right: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-/* Render target list now takes full height */
-.render-target-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.3rem;
-}
-
-/* Details panel takes remaining width */
-.render-target-details {
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-}
-
-/* Clickable items in timeline and node graph */
-.rt-name-cell {
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.rt-name-cell:hover {
-    background-color: rgba(52, 152, 219, 0.2) !important;
-}
-
-.node-element {
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.node-element:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-}
-
-.target-element {
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.target-element:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
-}
-
-/* New CSS rules to support the modified layout */
-
-/* Top controls container */
-.top-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-color);
-}
-
-/* Search box repositioned to the top right */
-.search-box {
-    padding: 0.5rem 1rem;
-    min-width: 250px;
-}
-
-/* Details container with list and details side by side */
-.details-container {
-    display: flex;
-    height: 100%;
-}
-
-/* Container for the render target list */
-.render-target-list-container {
-    width: var(--sidebar-width);
-    background-color: var(--card-bg);
-    border-right: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-/* Render target list now takes full height */
-.render-target-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.3rem;
-}
-
-/* Details panel takes remaining width */
-.render-target-details {
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-}
-
-/* Clickable items in timeline and node graph */
-.rt-name-cell {
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.rt-name-cell:hover {
-    background-color: rgba(52, 152, 219, 0.2) !important;
-}
-
-.node-element {
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.node-element:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-}
-
-.target-element {
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.target-element:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.25) !important;
 }
 
 /* Search match highlighting */
 .target-element.search-match {
     transform: translateY(-2px);
-    box-shadow: 0 0 8px rgba(255, 255, 0, 0.5);
+    box-shadow: 0 0 8px rgba(229, 168, 32, 0.5);
     position: relative;
     z-index: 2;
 }
@@ -1279,116 +1063,17 @@ textarea {
     left: 0;
     right: 0;
     bottom: 0;
-    border: 2px solid yellow;
+    border: 2px solid #E5A820;
     border-radius: 3px;
     pointer-events: none;
-}
-
-/* New CSS rules to support the modified layout */
-
-/* Top controls container */
-.top-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-color);
-}
-
-/* Search box repositioned to the top right */
-.search-box {
-    padding: 0.5rem 1rem;
-    min-width: 250px;
-}
-
-/* Details container with list and details side by side */
-.details-container {
-    display: flex;
-    height: 100%;
-}
-
-/* Container for the render target list */
-.render-target-list-container {
-    width: var(--sidebar-width);
-    background-color: var(--card-bg);
-    border-right: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-/* Render target list now takes full height */
-.render-target-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.3rem;
-}
-
-/* Details panel takes remaining width */
-.render-target-details {
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-}
-
-/* Clickable items in timeline and node graph */
-.rt-name-cell {
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.rt-name-cell:hover {
-    background-color: rgba(52, 152, 219, 0.2) !important;
-}
-
-.node-element {
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.node-element:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-}
-
-.target-element {
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.target-element:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
-}
-
-/* Search match highlighting */
-.target-element.search-match {
-    transform: translateY(-2px);
-    box-shadow: 0 0 8px rgba(255, 255, 0, 0.5);
-    position: relative;
-    z-index: 2;
-}
-
-.target-element.search-match::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border: 2px solid yellow;
-    border-radius: 3px;
-    pointer-events: none;
-}
-
-.search-box {
-    position: relative;
 }
 
 .search-tooltip {
     position: absolute;
     top: calc(100% + 5px);
     right: 0;
-    background-color: #333;
-    color: white;
+    background-color: #161b22;
+    color: #d4d4d4;
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 12px;
@@ -1397,13 +1082,13 @@ textarea {
     pointer-events: none;
     z-index: 100;
     white-space: nowrap;
+    border: 1px solid #1c2028;
 }
 
 .search-box:hover .search-tooltip {
     opacity: 0.9;
 }
 
-/* Add a small arrow to the tooltip */
 .search-tooltip:after {
     content: '';
     position: absolute;
@@ -1413,17 +1098,17 @@ textarea {
     height: 0;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-bottom: 5px solid #333;
+    border-bottom: 5px solid #161b22;
 }
 
 /* Target element usage styles */
 .target-element.read {
-    background-color: rgba(39, 174, 96, 0.1);
+    background-color: rgba(39, 174, 96, 0.15);
     border-left: 3px solid #27ae60;
 }
 
 .target-element.write {
-    background-color: rgba(231, 76, 60, 0.1);
+    background-color: rgba(231, 76, 60, 0.15);
     border-left: 3px solid #e74c3c;
 }
 
@@ -1434,7 +1119,7 @@ textarea {
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: #777;
+    color: #6b7280;
     font-size: 16px;
     font-weight: bold;
     cursor: pointer;
@@ -1451,24 +1136,11 @@ textarea {
 
 .clear-search-button:hover {
     opacity: 1;
-    color: var(--secondary-color);
-    background-color: rgba(0, 0, 0, 0.05);
+    color: #d4d4d4;
+    background-color: rgba(255, 255, 255, 0.05);
 }
-
-/* Update the existing search-box input rule */
-.search-box input {
-    width: 100%;
-    padding: 0.4rem 1.8rem 0.4rem 0.4rem; /* Add right padding for the clear button */
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-
-
 
 /* Debug Viewer CSS */
-/* Styles for the debug viewer tab */
-
 .debug-container {
     display: grid;
     grid-template-columns: 300px 1fr;
@@ -1476,16 +1148,17 @@ textarea {
 }
 
 .debug-sidebar {
-    background-color: #f5f5f5;
+    background-color: #0d1117;
     padding: 15px;
     border-radius: 4px;
+    border: 1px solid #1c2028;
 }
 
 .debug-main-content {
-    background-color: #fff;
+    background-color: #0d1117;
     padding: 15px;
     border-radius: 4px;
-    border: 1px solid #ddd;
+    border: 1px solid #1c2028;
 }
 
 .stats {
@@ -1495,53 +1168,55 @@ textarea {
 }
 
 .stat-box {
-    background-color: #fff;
-    border: 1px solid #ddd;
+    background-color: #0d1117;
+    border: 1px solid #1c2028;
     border-radius: 4px;
     padding: 10px;
     flex: 1;
 }
 
 .error-count {
-    color: #d32f2f;
+    color: #f48771;
     font-weight: bold;
 }
 
 .warning-count {
-    color: #f57c00;
+    color: #E5A820;
     font-weight: bold;
 }
 
 .info-count {
-    color: #0288d1;
+    color: #569cd6;
     font-weight: bold;
 }
 
 .total-count {
-    color: #555;
+    color: #9ca3af;
     font-weight: bold;
 }
 
 .issue-type {
     padding: 8px;
     cursor: pointer;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid #1c2028;
+    color: #d4d4d4;
 }
 
 .issue-type:hover {
-    background-color: #e0e0e0;
+    background-color: #161b22;
 }
 
 .issue-type.selected {
-    background-color: #e1f5fe;
+    background-color: rgba(86, 156, 214, 0.15);
     font-weight: bold;
 }
 
 .issue-item {
-    border: 1px solid #ddd;
+    border: 1px solid #1c2028;
     border-radius: 4px;
     padding: 10px;
     margin-bottom: 10px;
+    background-color: #0d1117;
 }
 
 .issue-item h3 {
@@ -1550,20 +1225,20 @@ textarea {
 }
 
 .issue-error {
-    border-left: 5px solid #d32f2f;
+    border-left: 5px solid #f48771;
 }
 
 .issue-warning {
-    border-left: 5px solid #f57c00;
+    border-left: 5px solid #E5A820;
 }
 
 .issue-info {
-    border-left: 5px solid #0288d1;
+    border-left: 5px solid #569cd6;
 }
 
 .error-badge {
-    background-color: #d32f2f;
-    color: white;
+    background-color: #f48771;
+    color: #070a11;
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
@@ -1571,8 +1246,8 @@ textarea {
 }
 
 .warning-badge {
-    background-color: #f57c00;
-    color: white;
+    background-color: #E5A820;
+    color: #070a11;
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
@@ -1580,8 +1255,8 @@ textarea {
 }
 
 .info-badge {
-    background-color: #0288d1;
-    color: white;
+    background-color: #569cd6;
+    color: #070a11;
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
@@ -1590,11 +1265,12 @@ textarea {
 
 .details {
     font-family: monospace;
-    background-color: #f5f5f5;
+    background-color: #161b22;
     padding: 10px;
     border-radius: 4px;
     margin-top: 10px;
     white-space: pre-wrap;
+    color: #d4d4d4;
 }
 
 .filter-bar {
@@ -1605,8 +1281,10 @@ textarea {
 
 .filter-bar select, .filter-bar input {
     padding: 5px;
-    border: 1px solid #ddd;
+    border: 1px solid #1c2028;
     border-radius: 4px;
+    background: #161b22;
+    color: #d4d4d4;
 }
 
 .filter-bar input {
@@ -1614,7 +1292,7 @@ textarea {
 }
 
 .upload-area {
-    border: 2px dashed #ddd;
+    border: 2px dashed #1c2028;
     border-radius: 4px;
     padding: 20px;
     text-align: center;
@@ -1622,17 +1300,17 @@ textarea {
 }
 
 .upload-area.dragover {
-    background-color: #e1f5fe;
-    border-color: #0288d1;
+    background-color: rgba(86, 156, 214, 0.1);
+    border-color: #569cd6;
 }
 
 .placeholder {
     text-align: center;
-    color: #888;
+    color: #6b7280;
     margin: 50px 0;
 }
 
-/* Add some responsive adjustments */
+/* Responsive adjustments */
 @media (max-width: 768px) {
     .debug-container {
         grid-template-columns: 1fr;
@@ -1641,23 +1319,23 @@ textarea {
 
 /* Drag and Drop Area Styles */
 .drag-drop-area {
-    border: 2px dashed #ccc;
+    border: 2px dashed #1c2028;
     border-radius: 20px;
     padding: 20px;
     text-align: center;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.02);
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
 .drag-drop-area:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-    border-color: #aaa;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: #2a3140;
 }
 
 .drag-drop-area.dragover {
-    background-color: rgba(52, 152, 219, 0.2);
-    border-color: #3498db;
+    background-color: rgba(86, 156, 214, 0.1);
+    border-color: #569cd6;
 }
 
 .drag-drop-content {
@@ -1676,11 +1354,12 @@ textarea {
 
 .drag-drop-area p {
     margin: 5px 0;
+    color: #d4d4d4;
 }
 
 .drag-drop-small {
     font-size: 0.8rem;
-    color: #999;
+    color: #6b7280;
 }
 
 /* Debug panel specific drag-drop area */
@@ -1707,8 +1386,8 @@ textarea {
 
 /* Paste JSON panel */
 .paste-panel {
-    background: var(--bg-color, #1e1e1e);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    background: #0d1117;
+    border-bottom: 1px solid #1c2028;
     padding: 0.75rem 1.5rem;
     display: flex;
     gap: 0.75rem;
@@ -1720,19 +1399,19 @@ textarea {
     min-height: 60px;
     max-height: 200px;
     padding: 0.5rem 0.7rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #1c2028;
     border-radius: 4px;
     font-family: monospace;
     font-size: 0.8rem;
-    background: rgba(255, 255, 255, 0.08);
+    background: #161b22;
     color: #d4d4d4;
     resize: vertical;
 }
 
 .paste-textarea:focus {
     outline: none;
-    border-color: var(--primary-color, #3498db);
-    background: rgba(255, 255, 255, 0.12);
+    border-color: var(--primary-color);
+    background: #1c2333;
 }
 
 .paste-actions {
@@ -1743,14 +1422,33 @@ textarea {
 }
 
 .paste-cancel-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: #161b22;
+    border: 1px solid #1c2028;
 }
 
 .paste-cancel-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: #1c2333;
 }
 
 #paste-json-btn {
     white-space: nowrap;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #070a11;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1c2028;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #2a3140;
 }
