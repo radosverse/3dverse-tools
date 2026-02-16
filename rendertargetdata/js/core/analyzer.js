@@ -1,8 +1,7 @@
 // Analyzer module - computes execution order, relationships, and lifetimes
-// Port of Python analyzer.py to JavaScript
 
 (function() {
-    const { BINDING_RANGES } = window.RenderGraphConstants;
+    const { BINDING_ACCESS, BINDING_FLAGS, SYSTEM_RT_INDEX_LIST } = window.RenderGraphConstants;
 
     // Analysis cache for performance with large graphs
     const analysisCache = new WeakMap();
@@ -130,37 +129,48 @@
 
     /**
      * Decode shader bindings from dataJson
-     * Address encoding:
-     * - 0x10000 + RT_index = Read-only binding
-     * - 0x20000 + RT_index = Write-only binding
-     * - 0x30000 + RT_index = Read-write binding
+     * Encoding (from render_target_index_json.hpp):
+     *   bits 0-15:  localIndex (RT index)
+     *   bits 16-23: access (1=read, 2=write, 3=read_write)
+     *   bits 24-31: flags (1=is_compute_reference)
      */
     function decodeShaderBindings(dataJson, rtCount) {
+        const INDEX_MASK  = 0x0000FFFF;
+        const ACCESS_MASK = 0x00FF0000;
+        const FLAGS_MASK  = 0xFF000000;
+
         const bindings = [];
 
         for (const [key, value] of Object.entries(dataJson)) {
             if (typeof value !== 'number') continue;
+            // Must be a positive integer with at least the access bits set
+            if (value < 0x10000 || !Number.isInteger(value)) continue;
+
+            const rtIndex = value & INDEX_MASK;
+            const access  = (value & ACCESS_MASK) >>> 16;
+            const flags   = (value & FLAGS_MASK) >>> 24;
+
+            // access must be a valid render_target_access value (1, 2, or 3)
+            if (access < BINDING_ACCESS.READ || access > BINDING_ACCESS.READ_WRITE) continue;
+            // rtIndex must be in range of known RTs
+            if (rtIndex >= rtCount) continue;
 
             let type = null;
-            let rtIndex = null;
-
-            if (value >= BINDING_RANGES.READ.start && value < BINDING_RANGES.READ.end) {
+            if (access === BINDING_ACCESS.READ) {
                 type = 'input';
-                rtIndex = value - BINDING_RANGES.READ.start;
-            } else if (value >= BINDING_RANGES.WRITE.start && value < BINDING_RANGES.WRITE.end) {
+            } else if (access === BINDING_ACCESS.WRITE) {
                 type = 'output';
-                rtIndex = value - BINDING_RANGES.WRITE.start;
-            } else if (value >= BINDING_RANGES.READWRITE.start && value < BINDING_RANGES.READWRITE.end) {
+            } else if (access === BINDING_ACCESS.READ_WRITE) {
                 type = 'input_output';
-                rtIndex = value - BINDING_RANGES.READWRITE.start;
             }
 
-            if (type && rtIndex !== null && rtIndex >= 0 && rtIndex < rtCount) {
+            if (type) {
                 bindings.push({
                     key: key,
                     type: type,
                     rtIndex: rtIndex,
-                    encodedAddress: value
+                    encodedAddress: value,
+                    isComputeReference: (flags & BINDING_FLAGS.IS_COMPUTE_REFERENCE) !== 0
                 });
             }
         }

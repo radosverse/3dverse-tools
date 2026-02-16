@@ -1,11 +1,11 @@
 // Parser for raw render graph JSON
-// Converts raw JSON into typed objects matching Python dataclass behavior
+// Converts raw JSON into typed objects matching render_graph_description.hpp
 
 (function() {
     const { FORMAT_MAP, USAGE_FLAGS, ASPECT_FLAGS, NODE_TYPES } = window.RenderGraphConstants;
 
     /**
-     * RenderTarget class - represents a render target in the render graph
+     * RenderTarget class - matches render_target_description struct
      */
     class RenderTarget {
         constructor(index, desc) {
@@ -16,11 +16,13 @@
             this.mipLevels = desc.mipLevels || 1;
             this.sampleCount = desc.sampleCount || 1;
             this.usage = desc.usage || 0;
-            this.memoryType = desc.memoryType || 0;
+            this.memoryType = desc.memoryType ?? 0;
             this.aspect = desc.aspect ?? 1;
             this.samplerType = desc.samplerType ?? null;
             this.memoryUsage = desc.memoryUsage ?? null;
             this.tiling = desc.tiling ?? null;
+            this.flags = desc.flags ?? 0;
+            this.denoiserTarget = desc.denoiserTarget ?? -1;
 
             // Analysis fields - populated later by analyzer
             this.inputToNodes = [];
@@ -63,20 +65,33 @@
             }
         }
 
+        isDepthFormat() {
+            const { DEPTH_FORMATS } = window.RenderGraphConstants;
+            return DEPTH_FORMATS.includes(this.format);
+        }
+
+        isColorFormat() {
+            const { COLOR_FORMATS } = window.RenderGraphConstants;
+            return COLOR_FORMATS.includes(this.format);
+        }
     }
 
     /**
-     * Node class - represents a node in the render graph
+     * Node class - matches node_data_description struct
      */
     class Node {
         constructor(index, desc) {
             this.index = index;
             this.name = desc.name || `Node_${index}`;
-            this.type = desc.type || 0;
+            this.type = desc.type ?? 0;
             this.inputs = desc.inputRenderTargetIndices || [];
             this.outputs = desc.outputRenderTargetIndices || [];
             this.conditions = desc.conditions || [];
             this.dataJson = desc.dataJson || {};
+            this.constantsJson = desc.constantsJson || {};
+            this.aliases = desc.aliases || {};
+            this.batchType = desc.batchType ?? 0;
+            this.shaderRef = desc.shaderRef || null;
             this.executionOrder = -1;
             this.renderPass = null;
             this.renderPassIndex = null;
@@ -89,7 +104,7 @@
     }
 
     /**
-     * RenderPass class - represents a render pass in the render graph
+     * RenderPass class - matches render_pass_description struct
      */
     class RenderPass {
         constructor(index, desc) {
@@ -100,6 +115,7 @@
             this.depthAttachmentIndex = desc.depthAttachmentIndex ?? null;
             this.resolveAttachmentIndices = desc.resolveAttachmentIndices || [];
             this.conditions = desc.conditions || [];
+            this.sampleCount = desc.sampleCount ?? 1;
         }
 
     }

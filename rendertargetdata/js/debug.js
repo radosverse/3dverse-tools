@@ -11,8 +11,27 @@
         },
 
         activate: function() {
-            // Debug viewer has its own data independent of main app
-            // No need to check app.graphData() here
+            // If we have debug data already loaded, ensure the container is visible
+            if (this.debugData) {
+                const mainContainer = document.getElementById('debug-main-container');
+                const placeholderMessage = document.getElementById('debug-placeholder-message');
+                if (mainContainer) mainContainer.style.display = 'grid';
+                if (placeholderMessage) placeholderMessage.style.display = 'none';
+            }
+        },
+
+        onDataLoaded: function(data) {
+            // When new graph data is loaded, re-run validation if analyzedData is available
+            if (app.analyzedData && window.RenderGraphDebugger) {
+                const issues = window.RenderGraphDebugger.runAllChecks(
+                    app.analyzedData.renderTargets,
+                    app.analyzedData.nodes,
+                    app.analyzedData.renderPasses,
+                    app.rawData || null
+                );
+                const debugData = window.RenderGraphDebugger.formatIssuesForView(issues);
+                this.loadDebugData(debugData);
+            }
         },
 
         renderInitialState: function() {
@@ -39,6 +58,10 @@
                             <div class="stat-box">
                                 <h4>Info</h4>
                                 <div class="info-count" id="debug-info-count">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <h4>Transitions</h4>
+                                <div class="transition-count" id="debug-transition-count">0</div>
                             </div>
                         </div>
 
@@ -124,8 +147,9 @@
                 }
             } else {
                 this.debugData = data;
-                // Add info count if not already present
-                if (!this.debugData.infos) {
+                // Add info count if not already present (use undefined check, not falsy,
+                // since 0 is a valid count)
+                if (this.debugData.infos === undefined) {
                     this.debugData.infos = this.debugData.issues.filter(i => i.severity === 'INFO').length;
                 }
             }
@@ -140,16 +164,30 @@
             this.processDebugData();
         },
 
+        // Issue types that represent resource transition concerns
+        TRANSITION_TYPES: [
+            'REDUNDANT_WRITE', 'WRITE_THEN_CLEAR',
+            'MISSING_TRANSFER_SRC_FLAG', 'MISSING_TRANSFER_DST_FLAG',
+            'SAME_PASS_READ_WRITE'
+        ],
+
         processDebugData: function() {
             const issues = this.debugData.issues;
             const errorCount = document.getElementById('debug-error-count');
             const warningCount = document.getElementById('debug-warning-count');
             const infoCount = document.getElementById('debug-info-count');
+            const transitionCount = document.getElementById('debug-transition-count');
 
-            // Update summary stats
-            if (errorCount) errorCount.textContent = this.debugData.errors || issues.filter(i => i.severity === 'ERROR').length;
-            if (warningCount) warningCount.textContent = this.debugData.warnings || issues.filter(i => i.severity === 'WARNING').length;
-            if (infoCount) infoCount.textContent = this.debugData.infos || issues.filter(i => i.severity === 'INFO').length;
+            // Update summary stats (use nullish coalescing to avoid 0 being treated as falsy)
+            if (errorCount) errorCount.textContent = this.debugData.errors ?? issues.filter(i => i.severity === 'ERROR').length;
+            if (warningCount) warningCount.textContent = this.debugData.warnings ?? issues.filter(i => i.severity === 'WARNING').length;
+            if (infoCount) infoCount.textContent = this.debugData.infos ?? issues.filter(i => i.severity === 'INFO').length;
+
+            // Count transition-related issues
+            if (transitionCount) {
+                const transCount = issues.filter(i => this.TRANSITION_TYPES.includes(i.type)).length;
+                transitionCount.textContent = transCount;
+            }
 
             // Group issues by type
             this.issuesByType = {};
@@ -199,6 +237,28 @@
                 this.selectIssueType('all');
             });
             issueTypesList.appendChild(allIssuesElement);
+
+            // Add "Resource Transitions" group filter
+            const transitionIssueCount = Object.keys(this.issuesByType)
+                .filter(t => this.TRANSITION_TYPES.includes(t))
+                .reduce((sum, t) => sum + this.issuesByType[t].length, 0);
+
+            if (transitionIssueCount > 0) {
+                const transElement = document.createElement('div');
+                transElement.className = 'issue-type';
+                transElement.dataset.type = '_transitions';
+                transElement.textContent = 'Resource Transitions';
+
+                const countBadge = document.createElement('span');
+                countBadge.className = 'info-badge';
+                countBadge.textContent = transitionIssueCount;
+                transElement.appendChild(countBadge);
+
+                transElement.addEventListener('click', () => {
+                    this.selectIssueType('_transitions');
+                });
+                issueTypesList.appendChild(transElement);
+            }
 
             // Add individual issue types
             sortedTypes.forEach(type => {
@@ -256,7 +316,13 @@
             // Update title and issues list
             const issueListTitle = document.getElementById('debug-issue-list-title');
             if (issueListTitle) {
-                issueListTitle.textContent = type === 'all' ? 'All Issues' : `Issues: ${type}`;
+                if (type === 'all') {
+                    issueListTitle.textContent = 'All Issues';
+                } else if (type === '_transitions') {
+                    issueListTitle.textContent = 'Resource Transitions';
+                } else {
+                    issueListTitle.textContent = `Issues: ${type}`;
+                }
             }
             this.renderIssuesList();
         },
@@ -273,7 +339,9 @@
             // Filter issues based on selected type, severity, and search term
             let filteredIssues = this.debugData.issues;
 
-            if (this.selectedType !== 'all') {
+            if (this.selectedType === '_transitions') {
+                filteredIssues = filteredIssues.filter(issue => this.TRANSITION_TYPES.includes(issue.type));
+            } else if (this.selectedType !== 'all') {
                 filteredIssues = filteredIssues.filter(issue => issue.type === this.selectedType);
             }
 
@@ -358,28 +426,17 @@
                 // Format is typically "RT 'name'" or similar patterns
                 let messageText = issue.message;
 
-                // Create a function to make render target names clickable
+                // Create a function to make render target names clickable.
+                // Uses a single pass regex to avoid double-wrapping from sequential patterns.
                 const makeRenderTargetsClickable = (text) => {
-                    // Match patterns like: RT 'name' or render target 'name' or similar variations
-                    const rtPatterns = [
-                        /RT\s+'([^']+)'/g,                    // RT 'name'
-                        /RT\s+"([^"]+)"/g,                    // RT "name"
-                        /render target\s+'([^']+)'/gi,        // render target 'name'
-                        /render target\s+"([^"]+)"/gi,        // render target "name"
-                        /render target\s+([a-zA-Z0-9_]+)/gi,  // render target name (without quotes)
-                        /'([^']+)'\s+(?:RT|render target)/gi  // 'name' render target
-                    ];
+                    // Match quoted names after RT or render target keywords in one pass.
+                    // Captures: RT 'name', RT "name", render target 'name', render target "name"
+                    const pattern = /(?:RT|render target)\s+['"]([^'"]+)['"]/gi;
 
-                    // Replace all instances of render target names with clickable spans
-                    rtPatterns.forEach(pattern => {
-                        text = text.replace(pattern, (match, rtName) => {
-                            // Keep the original text but wrap the RT name in a clickable span
-                            const clickablePart = match.replace(rtName, `<span class="clickable-rt" style="cursor:pointer;color:#3498db;text-decoration:underline;" data-rtname="${rtName}">${rtName}</span>`);
-                            return clickablePart;
-                        });
+                    return text.replace(pattern, (match, rtName) => {
+                        const clickablePart = match.replace(rtName, `<span class="clickable-rt" style="cursor:pointer;color:#3498db;text-decoration:underline;" data-rtname="${rtName}">${rtName}</span>`);
+                        return clickablePart;
                     });
-
-                    return text;
                 };
 
                 // Apply the transformation
@@ -398,6 +455,15 @@
                 }, 0);
 
                 issueElement.appendChild(message);
+
+                // Transition visual for issues with from/to layout data
+                if (issue.details && issue.details.from && issue.details.to &&
+                    issue.details.from.layout && issue.details.to.layout) {
+                    const transVisual = this.createTransitionVisual(issue);
+                    if (transVisual) {
+                        issueElement.appendChild(transVisual);
+                    }
+                }
 
                 // Details
                 if (issue.details && Object.keys(issue.details).length > 0) {
@@ -429,8 +495,88 @@
 
                 issuesList.appendChild(issueElement);
             });
-        }
+        },
 
+        /**
+         * Create a visual transition indicator showing from-layout -> to-layout
+         */
+        createTransitionVisual: function(issue) {
+            const from = issue.details.from;
+            const to = issue.details.to;
+
+            // Determine transition class for color coding
+            let transitionClass = 'transition-layout-change';
+            if (issue.type === 'REDUNDANT_WRITE' ||
+                       issue.type === 'WRITE_THEN_CLEAR' ||
+                       issue.type === 'SAME_PASS_READ_WRITE') {
+                transitionClass = 'transition-hazard';
+            } else if (issue.type === 'MISSING_TRANSFER_SRC_FLAG' ||
+                       issue.type === 'MISSING_TRANSFER_DST_FLAG') {
+                transitionClass = 'transition-error';
+            }
+
+            const container = document.createElement('div');
+            container.className = `transition-visual ${transitionClass}`;
+
+            // From state
+            const fromState = document.createElement('div');
+            fromState.className = 'transition-state transition-state-from';
+
+            const fromLayout = document.createElement('div');
+            fromLayout.className = 'transition-layout';
+            fromLayout.textContent = from.layout;
+            fromState.appendChild(fromLayout);
+
+            const fromStage = document.createElement('div');
+            fromStage.className = 'transition-stage';
+            fromStage.textContent = from.stage;
+            fromState.appendChild(fromStage);
+
+            const fromNode = document.createElement('div');
+            fromNode.className = 'transition-node';
+            fromNode.textContent = from.node_name + ' (' + from.access + ')';
+            fromState.appendChild(fromNode);
+
+            container.appendChild(fromState);
+
+            // Arrow
+            const arrow = document.createElement('div');
+            arrow.className = 'transition-arrow';
+            arrow.textContent = '-->';
+            container.appendChild(arrow);
+
+            // To state
+            const toState = document.createElement('div');
+            toState.className = 'transition-state transition-state-to';
+
+            const toLayout = document.createElement('div');
+            toLayout.className = 'transition-layout';
+            toLayout.textContent = to.layout;
+            toState.appendChild(toLayout);
+
+            const toStage = document.createElement('div');
+            toStage.className = 'transition-stage';
+            toStage.textContent = to.stage;
+            toState.appendChild(toStage);
+
+            const toNode = document.createElement('div');
+            toNode.className = 'transition-node';
+            toNode.textContent = to.node_name + ' (' + to.access + ')';
+            toState.appendChild(toNode);
+
+            container.appendChild(toState);
+
+            // Show active conditions if present
+            if (issue.details.active_conditions && issue.details.active_conditions.length > 0) {
+                const condBar = document.createElement('div');
+                condBar.className = 'transition-conditions';
+                condBar.style.cssText = 'grid-column: 1 / -1; font-size: 0.85em; opacity: 0.8; margin-top: 4px;';
+                condBar.textContent = 'when: ' + issue.details.active_conditions.join(', ');
+                container.appendChild(condBar);
+            }
+
+            return container;
+        }
 
     });
 

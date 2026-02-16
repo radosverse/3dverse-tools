@@ -1,29 +1,95 @@
 // Debugger module - validation checks for render graph analysis
-// Port of Python debugger.py to JavaScript
 
 (function() {
-    const { USAGE_BITS, ASPECT_BITS, NODE_TYPES, FORMAT_MAP, BINDING_RANGES } = window.RenderGraphConstants;
+    const {
+        USAGE_BITS, ASPECT_BITS, NODE_TYPES, FORMAT_MAP,
+        BINDING_ACCESS, BINDING_FLAGS,
+        SYSTEM_RT_INDEX_LIST,
+        COLOR_FORMATS, DEPTH_FORMATS,
+        IMAGE_LAYOUT, PIPELINE_STAGE, PASS_TYPE, NODE_TO_PASS_TYPE,
+        getExpectedImageState, getAttachmentImageState
+    } = window.RenderGraphConstants;
 
-    // Node type constants for readability (matching Python debugger.py)
+    // Node type constants (frame_node_type enum values from render_graph_description.hpp)
     const VIEWPORT_NODE = 0;
-    const DRAW_NODE = 1;
-    const DYNAMIC_DRAW_NODE = 2;
-    const COMPUTE_NODE = 3;
-    const BLIT_NODE = 4;
-    const DEPTH_STENCIL_BLIT_NODE = 5;
-    const FULLSCREEN_PASS_NODE = 8;
-    const GENERATE_MIPS_NODE = 9;
-    const CLEAR_NODE = 13;
-    const CLEAR_POINT_CLOUD_NODE = 15;
-    const DEBUG_DRAW_NODE = 16;
-    const COMPUTE_DISPATCH_NODE = 17;
+    const DRAW_BATCH_NODE = 1;
+    const DRAW_BATCH_WITH_MATERIALS_NODE = 2;
+    const DISPATCH_COMPUTE_NODE = 3;
+    const BLIT_IMAGE_NODE = 4;
+    const BLIT_IMAGE_PTR_DST_NODE = 5;
+    const COPY_IMAGE_NODE = 6;
+    const RESOLVE_IMAGE_NODE = 7;
+    const DRAW_QUAD_NODE = 8;
+    const GENERATE_MIP_CHAIN_NODE = 9;
+    const COPY_TO_CUBEMAP_FACE_NODE = 10;
+    const CLEAR_IMAGES_NODE = 13;
+    const FILL_BUFFER_NODE = 15;
+    const DRAW_DEBUG_LINES_NODE = 16;
+    const DISPATCH_DECALS_COMPUTE_NODE = 17;
+    const SET_DEPTH_BIAS_NODE = 18;
+    const DISPATCH_RAY_TRACING_NODE = 19;
 
-    // Format categories for validation
-    const COLOR_FORMATS = [37, 44, 76, 91, 97, 109, 122]; // R8, R16G16, R16, RGBA16F, RGB10A2, RGBA8, RGBA16F
-    const DEPTH_FORMATS = [124, 126, 130]; // D16, D24S8, D32F
+    /**
+     * Get the effective conditions for a node, including its render pass conditions.
+     * A node only executes when ALL effective conditions are satisfied.
+     */
+    function getEffectiveConditions(node, renderPasses) {
+        const conditions = [...(node.conditions || [])];
+        if (node.renderPassIndex !== null && renderPasses && node.renderPassIndex in renderPasses) {
+            const rp = renderPasses[node.renderPassIndex];
+            if (rp.conditions && rp.conditions.length > 0) {
+                for (const cond of rp.conditions) {
+                    if (!conditions.includes(cond)) {
+                        conditions.push(cond);
+                    }
+                }
+            }
+        }
+        return conditions;
+    }
 
-    // System render target indices to ignore
-    const SYSTEM_RT_INDICES = [4294967276, 4294967279, 4294967278, 4294967277];
+    /**
+     * Check if two nodes with the given condition sets can execute in the same frame.
+     * Returns false if one requires condition X and the other requires !X.
+     */
+    function canCoexecute(conditionsA, conditionsB) {
+        if (!conditionsA || conditionsA.length === 0) return true;
+        if (!conditionsB || conditionsB.length === 0) return true;
+
+        for (const condA of conditionsA) {
+            const isNegA = condA.startsWith('!');
+            const baseA = isNegA ? condA.slice(1) : condA;
+
+            for (const condB of conditionsB) {
+                const isNegB = condB.startsWith('!');
+                const baseB = isNegB ? condB.slice(1) : condB;
+
+                if (baseA === baseB && isNegA !== isNegB) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Get the combined conditions under which both nodes would run simultaneously.
+     * Returns the deduplicated union of both condition sets.
+     * Returns null if unconditional (both have empty conditions).
+     */
+    function getCombinedConditions(conditionsA, conditionsB) {
+        const combined = new Set([...(conditionsA || []), ...(conditionsB || [])]);
+        return combined.size > 0 ? [...combined] : null;
+    }
+
+    /**
+     * Format a conditions array into a readable suffix for issue messages.
+     * Returns empty string if unconditional.
+     */
+    function formatConditionsSuffix(conditions) {
+        if (!conditions || conditions.length === 0) return '';
+        return ` (when: ${conditions.join(', ')})`;
+    }
 
     // Semantic concepts for naming consistency check
     const SEMANTIC_CONCEPTS = [
@@ -79,8 +145,8 @@
         checkNodeIOValidity(nodes, renderTargets, addIssue);
         checkRTMemoryRequirements(renderTargets, renderPasses, nodes, addIssue);
         checkMSAAResolveCompatibility(renderPasses, renderTargets, addIssue);
-        checkRenderTargetLifetime(renderTargets, nodes, addIssue);
-        checkResourceBarriers(renderTargets, nodes, addIssue);
+        checkRenderTargetLifetime(renderTargets, nodes, renderPasses, addIssue);
+        checkResourceBarriers(renderTargets, nodes, renderPasses, addIssue);
         checkMipmapGeneration(nodes, renderTargets, addIssue);
         checkResourceAliasingOpportunities(renderTargets, nodes, addIssue);
 
@@ -172,13 +238,20 @@
      */
     function checkUnusedNodes(nodes, addIssue) {
         for (const [idx, node] of Object.entries(nodes)) {
-            // Skip if the node has inputs or outputs
+            // Skip if the node has explicit inputs or outputs
             if (node.inputs.length > 0 || node.outputs.length > 0) {
                 continue;
             }
 
+            // Skip if the node has RT references encoded in dataJson (shader bindings)
+            if (node.dataJson && Object.values(node.dataJson).some(v =>
+                typeof v === 'number' && Number.isInteger(v) && v >= 0x10000
+            )) {
+                continue;
+            }
+
             // Skip some node types that might legitimately have no connections
-            if (node.type === VIEWPORT_NODE) {
+            if (node.type === VIEWPORT_NODE || node.type === SET_DEPTH_BIAS_NODE) {
                 continue;
             }
 
@@ -343,7 +416,7 @@
     function checkFormatCompatibility(nodes, renderTargets, addIssue) {
         for (const [nodeIdx, node] of Object.entries(nodes)) {
             // Only check blit operations
-            if (node.type !== BLIT_NODE && node.type !== DEPTH_STENCIL_BLIT_NODE) {
+            if (node.type !== BLIT_IMAGE_NODE && node.type !== BLIT_IMAGE_PTR_DST_NODE) {
                 continue;
             }
 
@@ -386,7 +459,7 @@
                     // Check sample count compatibility
                     if (inputRt.sampleCount !== outputRt.sampleCount) {
                         // Regular blit with MSAA to 1x is likely a resolve operation
-                        const severity = (node.type === BLIT_NODE && inputRt.sampleCount > 1 && outputRt.sampleCount === 1)
+                        const severity = (node.type === BLIT_IMAGE_NODE && inputRt.sampleCount > 1 && outputRt.sampleCount === 1)
                             ? "WARNING" : "ERROR";
 
                         addIssue(severity, "SAMPLE_COUNT_MISMATCH",
@@ -419,7 +492,7 @@
         for (const [nodeIdx, node] of Object.entries(nodes)) {
             // Check input references
             for (const rtIdx of node.inputs) {
-                if (rtIdx >= 0 && !(rtIdx in renderTargets) && !SYSTEM_RT_INDICES.includes(rtIdx)) {
+                if (rtIdx >= 0 && !(rtIdx in renderTargets) && !SYSTEM_RT_INDEX_LIST.includes(rtIdx)) {
                     addIssue("ERROR", "MISSING_RENDER_TARGET",
                         `Node '${node.name}' references non-existent input render target RT#${rtIdx}`,
                         {
@@ -434,7 +507,7 @@
 
             // Check output references
             for (const rtIdx of node.outputs) {
-                if (rtIdx >= 0 && !(rtIdx in renderTargets) && !SYSTEM_RT_INDICES.includes(rtIdx)) {
+                if (rtIdx >= 0 && !(rtIdx in renderTargets) && !SYSTEM_RT_INDEX_LIST.includes(rtIdx)) {
                     addIssue("ERROR", "MISSING_RENDER_TARGET",
                         `Node '${node.name}' references non-existent output render target RT#${rtIdx}`,
                         {
@@ -508,7 +581,7 @@
             for (const nodeIdx of rt.outputFromNodes) {
                 if (nodeIdx in nodes) {
                     const node = nodes[nodeIdx];
-                    if (node.type === COMPUTE_NODE || node.type === COMPUTE_DISPATCH_NODE) {
+                    if (node.type === DISPATCH_COMPUTE_NODE || node.type === DISPATCH_DECALS_COMPUTE_NODE || node.type === DISPATCH_RAY_TRACING_NODE) {
                         if (!(rt.usage & USAGE_BITS.STORAGE)) {
                             addIssue("ERROR", "MISSING_STORAGE_FLAG",
                                 `Render target '${rt.name}' (index ${idx}) written by compute shader node '${node.name}' but lacks STORAGE flag`,
@@ -650,7 +723,7 @@
             const nodeType = node.type;
 
             // Check blit nodes
-            if (nodeType === BLIT_NODE || nodeType === DEPTH_STENCIL_BLIT_NODE) {
+            if (nodeType === BLIT_IMAGE_NODE || nodeType === BLIT_IMAGE_PTR_DST_NODE) {
                 if (node.inputs.length === 0) {
                     addIssue("ERROR", "INVALID_NODE_INPUTS",
                         `Blit node '${node.name}' (index ${nodeIdx}) has no inputs`,
@@ -674,7 +747,7 @@
                 }
             }
             // Check clear nodes
-            else if (nodeType === CLEAR_NODE) {
+            else if (nodeType === CLEAR_IMAGES_NODE) {
                 if (node.inputs.length > 0) {
                     addIssue("WARNING", "UNEXPECTED_NODE_INPUTS",
                         `Clear node '${node.name}' (index ${nodeIdx}) should not have inputs`,
@@ -697,27 +770,8 @@
                     );
                 }
             }
-            // Check compute nodes
-            else if (nodeType === COMPUTE_NODE || nodeType === COMPUTE_DISPATCH_NODE) {
-                for (const outputIdx of node.outputs) {
-                    if (outputIdx >= 0 && outputIdx in renderTargets) {
-                        const rt = renderTargets[outputIdx];
-                        if (!(rt.usage & USAGE_BITS.STORAGE)) {
-                            addIssue("ERROR", "MISSING_COMPUTE_STORAGE_FLAG",
-                                `Compute node '${node.name}' (index ${nodeIdx}) writes to render target '${rt.name}' (RT#${outputIdx}) which lacks STORAGE flag`,
-                                {
-                                    node_index: parseInt(nodeIdx),
-                                    node_name: node.name,
-                                    node_type: node.getTypeName(),
-                                    render_target_index: outputIdx,
-                                    render_target_name: rt.name,
-                                    usage_flags: rt.getUsageFlags()
-                                }
-                            );
-                        }
-                    }
-                }
-            }
+            // Compute STORAGE check is handled in checkRenderTargetUsageFlags
+            // to avoid duplicate issue reporting
         }
     }
 
@@ -956,7 +1010,7 @@
     /**
      * Check render target lifetime constraints
      */
-    function checkRenderTargetLifetime(renderTargets, nodes, addIssue) {
+    function checkRenderTargetLifetime(renderTargets, nodes, renderPasses, addIssue) {
         for (const [idx, rt] of Object.entries(renderTargets)) {
             // Skip special targets that might be populated externally
             const inputNames = ["backbuffer", "swapchain", "screen", "display", "input", "source", "external", "import"];
@@ -989,90 +1043,276 @@
                     continue;
                 }
 
-                const firstNode = nodes[rt.firstUsedAtNode];
+                // Collect all reader nodes sorted by execution order
+                const readers = rt.inputToNodes
+                    .filter(n => n in nodes)
+                    .sort((a, b) => nodes[a].executionOrder - nodes[b].executionOrder);
 
-                // Check if the first usage is a read
-                let isFirstRead = false;
-                if (rt.inputToNodes.includes(rt.firstUsedAtNode)) {
-                    isFirstRead = true;
-                }
+                // Collect all writer nodes sorted by execution order
+                const writers = rt.outputFromNodes
+                    .filter(n => n in nodes)
+                    .sort((a, b) => nodes[a].executionOrder - nodes[b].executionOrder);
 
-                // Also check if it's used as a color or depth attachment but not written to
-                if (rt.usedAsColorAttachment.length > 0 || rt.usedAsDepthAttachment.length > 0) {
-                    if (!rt.outputFromNodes.includes(rt.firstUsedAtNode)) {
-                        isFirstRead = true;
-                    }
-                }
+                if (readers.length === 0) continue;
 
-                if (isFirstRead) {
-                    addIssue("ERROR", "READ_BEFORE_WRITE",
-                        `Render target '${rt.name}' (RT#${idx}) is first read by node '${firstNode.name}' before being written to`,
-                        {
-                            render_target_index: parseInt(idx),
-                            render_target_name: rt.name,
-                            first_usage_node: {
-                                index: rt.firstUsedAtNode,
-                                name: firstNode.name,
-                                execution_order: firstNode.executionOrder,
-                                conditions: firstNode.conditions
-                            }
+                // For each reader, check if a compatible writer exists before it
+                for (const readerIdx of readers) {
+                    const readerNode = nodes[readerIdx];
+                    const readerConds = getEffectiveConditions(readerNode, renderPasses);
+
+                    // Find any writer that can coexecute with this reader
+                    // AND runs before it in execution order
+                    const hasCompatiblePriorWriter = writers.some(writerIdx => {
+                        if (writerIdx === readerIdx) return false; // same node can both read+write
+                        const writerNode = nodes[writerIdx];
+                        if (writerNode.executionOrder >= readerNode.executionOrder) return false;
+                        const writerConds = getEffectiveConditions(writerNode, renderPasses);
+                        return canCoexecute(readerConds, writerConds);
+                    });
+
+                    // Also check if the reader node itself writes (read-write)
+                    const readerAlsoWrites = rt.outputFromNodes.includes(readerIdx);
+
+                    if (!hasCompatiblePriorWriter && !readerAlsoWrites) {
+                        // Check if there's any compatible writer at all (even after)
+                        const hasAnyCompatibleWriter = writers.some(writerIdx => {
+                            const writerNode = nodes[writerIdx];
+                            const writerConds = getEffectiveConditions(writerNode, renderPasses);
+                            return canCoexecute(readerConds, writerConds);
+                        });
+
+                        if (hasAnyCompatibleWriter) {
+                            const condSuffix = formatConditionsSuffix(readerConds.length > 0 ? readerConds : null);
+                            addIssue("ERROR", "READ_BEFORE_WRITE",
+                                `Render target '${rt.name}' (RT#${idx}) is read by node '${readerNode.name}' before any compatible writer in the same execution path${condSuffix}`,
+                                {
+                                    render_target_index: parseInt(idx),
+                                    render_target_name: rt.name,
+                                    active_conditions: readerConds.length > 0 ? readerConds : null,
+                                    reader_node: {
+                                        index: readerIdx,
+                                        name: readerNode.name,
+                                        execution_order: readerNode.executionOrder,
+                                        conditions: readerNode.conditions
+                                    }
+                                }
+                            );
                         }
-                    );
+                        // If no compatible writer exists at all, this reader is on a
+                        // mutually exclusive path from all writers — not a read-before-write,
+                        // just a condition-path where this RT isn't written.
+                        break; // Only flag the first problematic reader per RT
+                    }
                 }
             }
         }
     }
 
     /**
-     * Check for missing resource barriers between incompatible usages
+     * Determine the access type for a node's usage of a render target.
+     * Checks shader bindings, explicit I/O, and attachment relationships.
+     *
+     * @param {Object} rt - Analyzed render target
+     * @param {number} nodeIdx - Node index
+     * @param {Object} node - Node object
+     * @returns {string} "read", "write", or "read_write"
      */
-    function checkResourceBarriers(renderTargets, nodes, addIssue) {
+    function getNodeAccessType(rt, nodeIdx, node) {
+        const isInput = rt.inputToNodes.includes(nodeIdx);
+        const isOutput = rt.outputFromNodes.includes(nodeIdx);
+
+        // Check shader binding types for more detail
+        const usageTypes = rt.nodeUsageTypes[nodeIdx] || [];
+        const hasReadWriteBinding = usageTypes.some(u =>
+            u.type === 'shader_binding' && u.bindingType === 'input_output'
+        );
+        if (hasReadWriteBinding) return "read_write";
+
+        if (isInput && isOutput) return "read_write";
+        if (isOutput) return "write";
+        return "read";
+    }
+
+    /**
+     * Get the image state for a node's usage of a render target, considering
+     * both attachment state and shader resource state.
+     *
+     * @param {Object} rt - Analyzed render target
+     * @param {number} nodeIdx - Node index
+     * @param {Object} node - Node object
+     * @param {string} accessType - "read", "write", or "read_write"
+     * @returns {Object|null} { layout, stage, source } where source is "attachment" or "shader_resource"
+     */
+    function getNodeImageState(rt, nodeIdx, node, accessType) {
+        // Check if this RT is used as a render pass attachment for this node
+        const usageTypes = rt.nodeUsageTypes[nodeIdx] || [];
+
+        for (const usage of usageTypes) {
+            if (usage.type === 'color_attachment') {
+                const state = getAttachmentImageState("color");
+                return { ...state, source: "attachment" };
+            }
+            if (usage.type === 'depth_attachment') {
+                const state = getAttachmentImageState("depth");
+                return { ...state, source: "attachment" };
+            }
+            if (usage.type === 'resolve_attachment' || usage.type === 'msaa_resolve_target') {
+                const state = getAttachmentImageState("resolve");
+                return { ...state, source: "attachment" };
+            }
+        }
+
+        // Otherwise it's a shader resource or transfer target
+        const state = getExpectedImageState(node.type, accessType);
+        if (state) {
+            return { ...state, source: "shader_resource" };
+        }
+
+        return null;
+    }
+
+    /**
+     * Check for resource transition issues using layout-aware state simulation.
+     *
+     * Detects missing usage flags, wasted writes, and same-pass conflicts.
+     * Condition-aware: skips issues between mutually exclusive execution paths.
+     */
+    function checkResourceBarriers(renderTargets, nodes, renderPasses, addIssue) {
         for (const [rtIdx, rt] of Object.entries(renderTargets)) {
-            // Sort nodes using this RT by execution order
+            // Collect all nodes that use this RT, sorted by execution order
             const usageNodes = [...new Set([...rt.inputToNodes, ...rt.outputFromNodes])]
                 .filter(n => n in nodes)
                 .sort((a, b) => nodes[a].executionOrder - nodes[b].executionOrder);
 
-            let lastUsage = null;
-            let lastUsageType = null;
+            if (usageNodes.length < 2) continue;
+
+            let prevState = null;    // { layout, stage, source }
+            let prevAccess = null;   // "read", "write", "read_write"
+            let prevNodeIdx = null;
 
             for (const nodeIdx of usageNodes) {
                 const node = nodes[nodeIdx];
+                const accessType = getNodeAccessType(rt, nodeIdx, node);
+                const imageState = getNodeImageState(rt, nodeIdx, node, accessType);
 
-                // Determine current usage type
-                let currentUsageType = null;
-                if (rt.outputFromNodes.includes(nodeIdx)) {
-                    currentUsageType = "write";
-                } else if (rt.inputToNodes.includes(nodeIdx)) {
-                    currentUsageType = "read";
+                if (!imageState) {
+                    // Node type has no barrier model (viewport, set_depth_bias).
+                    // Don't reset prev state - these nodes don't modify image layouts.
+                    continue;
                 }
 
-                // Check for write-after-read or read-after-write without barrier
-                if (lastUsage !== null && lastUsageType !== currentUsageType) {
-                    // Check if nodes are in different render passes
-                    if (node.renderPassIndex !== nodes[lastUsage].renderPassIndex) {
-                        addIssue("WARNING", "MISSING_RESOURCE_BARRIER",
-                            `Potential missing barrier for RT '${rt.name}' between '${nodes[lastUsage].name}' (${lastUsageType}) and '${node.name}' (${currentUsageType})`,
-                            {
-                                render_target_index: parseInt(rtIdx),
-                                render_target_name: rt.name,
-                                first_node: {
-                                    index: lastUsage,
-                                    name: nodes[lastUsage].name,
-                                    usage: lastUsageType
-                                },
-                                second_node: {
-                                    index: nodeIdx,
-                                    name: node.name,
-                                    usage: currentUsageType
-                                }
-                            }
+                if (prevState !== null && prevNodeIdx !== null) {
+                    const prevNode = nodes[prevNodeIdx];
+                    const layoutChanged = prevState.layout !== imageState.layout;
+                    const stageChanged = prevState.stage !== imageState.stage;
+                    const prevIsWrite = prevAccess === "write" || prevAccess === "read_write";
+                    const currIsWrite = accessType === "write" || accessType === "read_write";
+                    const currIsRead = accessType === "read" || accessType === "read_write";
+                    const sameRenderPass = node.renderPassIndex !== null &&
+                                           node.renderPassIndex === prevNode.renderPassIndex;
+
+                    const transitionDetails = {
+                        render_target_index: parseInt(rtIdx),
+                        render_target_name: rt.name,
+                        from: {
+                            node_index: prevNodeIdx,
+                            node_name: prevNode.name,
+                            node_type: prevNode.getTypeName(),
+                            access: prevAccess,
+                            layout: prevState.layout,
+                            stage: prevState.stage,
+                            source: prevState.source,
+                            render_pass_index: prevNode.renderPassIndex
+                        },
+                        to: {
+                            node_index: nodeIdx,
+                            node_name: node.name,
+                            node_type: node.getTypeName(),
+                            access: accessType,
+                            layout: imageState.layout,
+                            stage: imageState.stage,
+                            source: imageState.source,
+                            render_pass_index: node.renderPassIndex
+                        }
+                    };
+
+                    // Skip issues between nodes that can never run in the same frame
+                    const prevConds = getEffectiveConditions(prevNode, renderPasses);
+                    const currConds = getEffectiveConditions(node, renderPasses);
+                    const coexecute = canCoexecute(prevConds, currConds);
+                    const combinedConds = coexecute ? getCombinedConditions(prevConds, currConds) : null;
+                    const condSuffix = formatConditionsSuffix(combinedConds);
+
+                    // Write-after-write detection (redundant work, not a Vulkan hazard —
+                    // the engine handles all barriers via per-image currentAccessState_ tracking)
+                    if (coexecute && prevIsWrite && currIsWrite && !sameRenderPass) {
+                        const prevIsClear = prevNode.type === CLEAR_IMAGES_NODE;
+                        const currIsClear = node.type === CLEAR_IMAGES_NODE;
+                        const currIsViewport = node.type === VIEWPORT_NODE;
+                        const prevIsViewport = prevNode.type === VIEWPORT_NODE;
+
+                        const details = combinedConds
+                            ? { ...transitionDetails, active_conditions: combinedConds }
+                            : transitionDetails;
+
+                        if (currIsViewport || prevIsViewport) {
+                            // Viewport nodes don't actually write image data, skip
+                        } else if (prevIsClear) {
+                            // Clear followed by write is normal workflow, skip
+                        } else if (currIsClear) {
+                            addIssue("WARNING", "WRITE_THEN_CLEAR",
+                                `RT '${rt.name}': written by '${prevNode.name}' then immediately cleared by '${node.name}' (previous write is wasted)${condSuffix}`,
+                                details
+                            );
+                        } else {
+                            addIssue("WARNING", "REDUNDANT_WRITE",
+                                `RT '${rt.name}': written by '${prevNode.name}' then overwritten by '${node.name}' without intermediate read (first write is wasted)${condSuffix}`,
+                                details
+                            );
+                        }
+                    }
+
+                    // Check usage flag requirements for transfer operations
+                    if (imageState.layout === IMAGE_LAYOUT.TRANSFER_SRC_OPTIMAL) {
+                        if (!(rt.usage & USAGE_BITS.TRANSFER_SRC)) {
+                            addIssue("ERROR", "MISSING_TRANSFER_SRC_FLAG",
+                                `RT '${rt.name}' used as transfer source by node '${node.name}' but lacks TRANSFER_SRC usage flag`,
+                                transitionDetails
+                            );
+                        }
+                    }
+                    if (imageState.layout === IMAGE_LAYOUT.TRANSFER_DST_OPTIMAL) {
+                        if (!(rt.usage & USAGE_BITS.TRANSFER_DST)) {
+                            addIssue("ERROR", "MISSING_TRANSFER_DST_FLAG",
+                                `RT '${rt.name}' used as transfer destination by node '${node.name}' but lacks TRANSFER_DST usage flag`,
+                                transitionDetails
+                            );
+                        }
+                    }
+
+                    // Read-write conflict within the same render pass
+                    // (within a render pass, no layout transitions happen — the engine
+                    //  only inserts barriers between passes, not between nodes in a pass)
+                    if (sameRenderPass && prevIsWrite && currIsRead &&
+                        prevState.source === "attachment" && imageState.source === "shader_resource") {
+                        const passDetails = combinedConds
+                            ? { ...transitionDetails, active_conditions: combinedConds }
+                            : transitionDetails;
+                        addIssue("WARNING", "SAME_PASS_READ_WRITE",
+                            `RT '${rt.name}' is written as attachment and read as shader resource within the same render pass '${prevNode.renderPass}' by nodes '${prevNode.name}' -> '${node.name}'${condSuffix}`,
+                            passDetails
                         );
                     }
+
+                    // Note: layout/stage transitions between passes are NOT flagged here.
+                    // The engine handles all barriers automatically via vk::image::createImageMemoryBarrier()
+                    // which tracks currentAccessState_ per image and generates VkImageMemoryBarrier2
+                    // from current->needed state in each node's create_memory_barriers().
                 }
 
-                lastUsage = nodeIdx;
-                lastUsageType = currentUsageType;
+                prevState = imageState;
+                prevAccess = accessType;
+                prevNodeIdx = nodeIdx;
             }
         }
     }
@@ -1084,7 +1324,7 @@
         // Find nodes that generate mipmaps
         const mipmapGenerators = {};
         for (const [nodeIdx, node] of Object.entries(nodes)) {
-            if (node.type === GENERATE_MIPS_NODE) {
+            if (node.type === GENERATE_MIP_CHAIN_NODE) {
                 for (const inputIdx of node.inputs) {
                     if (inputIdx >= 0 && inputIdx in renderTargets) {
                         mipmapGenerators[inputIdx] = parseInt(nodeIdx);
@@ -1310,17 +1550,36 @@
     }
 
     /**
+     * Decode a render_target_index encoded value to its components.
+     * Encoding: (flags << 24) | (access << 16) | localIndex
+     */
+    function decodeRTIndexValue(value) {
+        if (typeof value !== 'number' || !Number.isInteger(value) || value < 0x10000) {
+            return null;
+        }
+        const INDEX_MASK  = 0x0000FFFF;
+        const ACCESS_MASK = 0x00FF0000;
+
+        const localIndex = value & INDEX_MASK;
+        const access = (value & ACCESS_MASK) >>> 16;
+
+        if (access < BINDING_ACCESS.READ || access > BINDING_ACCESS.READ_WRITE) {
+            return null;
+        }
+
+        let bindingType = null;
+        if (access === BINDING_ACCESS.READ) bindingType = "input";
+        else if (access === BINDING_ACCESS.WRITE) bindingType = "output";
+        else if (access === BINDING_ACCESS.READ_WRITE) bindingType = "input_output";
+
+        return { localIndex, bindingType };
+    }
+
+    /**
      * Check if shader bindings are connected to semantically appropriate render targets
      */
     function checkShaderBindingNamingConsistency(nodes, renderTargets, rawData, addIssue) {
-        // Build mapping from binding addresses to render target indices
         const rtCount = Object.keys(renderTargets).length;
-        const bindingAddressToRtIndex = {};
-        for (let i = 0; i < rtCount; i++) {
-            bindingAddressToRtIndex[BINDING_RANGES.READ.start + i] = i;
-            bindingAddressToRtIndex[BINDING_RANGES.WRITE.start + i] = i;
-            bindingAddressToRtIndex[BINDING_RANGES.READWRITE.start + i] = i;
-        }
 
         // Process each node
         for (const [nodeIdx, node] of Object.entries(nodes)) {
@@ -1344,58 +1603,49 @@
 
             // Process each key-value pair in dataJson
             for (const [bindingName, value] of Object.entries(dataJson)) {
-                // Only process values that are in the render target address encoding ranges
-                let bindingType = null;
-                if (typeof value === 'number') {
-                    if (value >= BINDING_RANGES.READ.start && value < BINDING_RANGES.READ.end) {
-                        bindingType = "input";
-                    } else if (value >= BINDING_RANGES.WRITE.start && value < BINDING_RANGES.WRITE.end) {
-                        bindingType = "output";
-                    } else if (value >= BINDING_RANGES.READWRITE.start && value < BINDING_RANGES.READWRITE.end) {
-                        bindingType = "input_output";
-                    }
+                const decoded = decodeRTIndexValue(value);
+                if (!decoded) continue;
+
+                const rtIdx = decoded.localIndex;
+                const bindingType = decoded.bindingType;
+
+                if (rtIdx >= rtCount || !(rtIdx in renderTargets)) continue;
+
+                const rt = renderTargets[rtIdx];
+                const bindingSemantics = extractSemantics(bindingName);
+                const rtSemantics = extractSemantics(rt.name);
+
+                // If both have identified semantic concepts but they're incompatible
+                if (bindingSemantics.concepts.length > 0 && rtSemantics.concepts.length > 0 && !areCompatible(bindingSemantics, rtSemantics)) {
+                    addIssue("ERROR", "SEMANTIC_MISMATCH",
+                        `Shader binding '${bindingName}' (concepts: ${bindingSemantics.concepts.join(', ')}) appears to be misconnected to '${rt.name}' (concepts: ${rtSemantics.concepts.join(', ')})`,
+                        {
+                            node_index: parseInt(nodeIdx),
+                            node_name: node.name,
+                            binding_name: bindingName,
+                            binding_type: bindingType,
+                            binding_concepts: bindingSemantics.concepts,
+                            binding_space: bindingSemantics.spacePrefix,
+                            render_target_index: rtIdx,
+                            render_target_name: rt.name,
+                            render_target_concepts: rtSemantics.concepts,
+                            render_target_space: rtSemantics.spacePrefix
+                        }
+                    );
                 }
-
-                if (bindingType) {
-                    const rtIdx = bindingAddressToRtIndex[value];
-                    if (rtIdx !== undefined && rtIdx in renderTargets) {
-                        const rt = renderTargets[rtIdx];
-                        const bindingSemantics = extractSemantics(bindingName);
-                        const rtSemantics = extractSemantics(rt.name);
-
-                        // If both have identified semantic concepts but they're incompatible
-                        if (bindingSemantics.concepts.length > 0 && rtSemantics.concepts.length > 0 && !areCompatible(bindingSemantics, rtSemantics)) {
-                            addIssue("ERROR", "SEMANTIC_MISMATCH",
-                                `Shader binding '${bindingName}' (concepts: ${bindingSemantics.concepts.join(', ')}) appears to be misconnected to '${rt.name}' (concepts: ${rtSemantics.concepts.join(', ')})`,
-                                {
-                                    node_index: parseInt(nodeIdx),
-                                    node_name: node.name,
-                                    binding_name: bindingName,
-                                    binding_type: bindingType,
-                                    binding_concepts: bindingSemantics.concepts,
-                                    binding_space: bindingSemantics.spacePrefix,
-                                    render_target_index: rtIdx,
-                                    render_target_name: rt.name,
-                                    render_target_concepts: rtSemantics.concepts,
-                                    render_target_space: rtSemantics.spacePrefix
-                                }
-                            );
+                // Check for coordinate space mismatches
+                else if (bindingSemantics.hasSpacePrefix && rtSemantics.hasSpacePrefix && bindingSemantics.spacePrefix !== rtSemantics.spacePrefix) {
+                    addIssue("WARNING", "COORDINATE_SPACE_MISMATCH",
+                        `Shader binding '${bindingName}' uses ${bindingSemantics.spacePrefix} coordinates but is connected to '${rt.name}' which uses ${rtSemantics.spacePrefix} coordinates`,
+                        {
+                            node_index: parseInt(nodeIdx),
+                            node_name: node.name,
+                            binding_name: bindingName,
+                            binding_space: bindingSemantics.spacePrefix,
+                            render_target_name: rt.name,
+                            render_target_space: rtSemantics.spacePrefix
                         }
-                        // Check for coordinate space mismatches
-                        else if (bindingSemantics.hasSpacePrefix && rtSemantics.hasSpacePrefix && bindingSemantics.spacePrefix !== rtSemantics.spacePrefix) {
-                            addIssue("WARNING", "COORDINATE_SPACE_MISMATCH",
-                                `Shader binding '${bindingName}' uses ${bindingSemantics.spacePrefix} coordinates but is connected to '${rt.name}' which uses ${rtSemantics.spacePrefix} coordinates`,
-                                {
-                                    node_index: parseInt(nodeIdx),
-                                    node_name: node.name,
-                                    binding_name: bindingName,
-                                    binding_space: bindingSemantics.spacePrefix,
-                                    render_target_name: rt.name,
-                                    render_target_space: rtSemantics.spacePrefix
-                                }
-                            );
-                        }
-                    }
+                    );
                 }
             }
         }
@@ -1442,7 +1692,12 @@
         checkShaderBindingNamingConsistency,
         // Helper functions
         extractSemantics,
-        areCompatible
+        areCompatible,
+        getNodeAccessType,
+        getNodeImageState,
+        getEffectiveConditions,
+        canCoexecute,
+        getCombinedConditions
     };
 
 })();
